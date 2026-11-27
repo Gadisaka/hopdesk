@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>hopdesk</title>
+<style>
+  :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+  body { margin: 0; display: flex; flex-direction: column; height: 100vh; background: #111; color: #eee; }
+  header { display: flex; gap: 8px; align-items: center; padding: 8px 12px; background: #1c1c1c; flex-wrap: wrap; }
+  header input[type=text], header input[type=password] { padding: 6px 8px; border-radius: 6px; border: 1px solid #444; background: #222; color: #eee; width: 150px; }
+  button { padding: 6px 14px; border-radius: 6px; border: 0; background: #3b82f6; color: white; cursor: pointer; }
+  button.secondary { background: #444; }
+  #status { margin-left: auto; font-size: 13px; color: #aaa; }
+  label { font-size: 13px; color: #ccc; display: flex; gap: 4px; align-items: center; }
+  main { flex: 1; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+  canvas { max-width: 100%; max-height: 100%; background: #000; outline: none; cursor: default; }
+  canvas:focus { box-shadow: 0 0 0 2px #3b82f6; }
+</style>
+</head>
+<body>
+<header>
+  <strong>hopdesk</strong>
+  <input id="id" type="text" placeholder="Device ID" autocomplete="off">
+  <input id="pw" type="password" placeholder="Password" autocomplete="off">
+  <button id="connect">Connect</button>
+  <button id="disconnect" class="secondary" hidden>Disconnect</button>
+  <label title="Send Ctrl when you press Cmd (useful when a Mac controls a Windows PC)">
+    <input id="swap" type="checkbox"> Cmd&rarr;Ctrl
+  </label>
+  <span id="status">Not connected</span>
+</header>
+<main><canvas id="screen" tabindex="0" width="1280" height="720"></canvas></main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const canvas = $('screen');
+const ctx = canvas.getContext('2d');
+let pc = null, framesDc = null, inputDc = null;
+let frames = new Map(), lastDrawn = -1;
+const pressed = new Set();
+
+function setStatus(t) { $('status').textContent = t; }
+
+function waitIce(pc) {
+  return new Promise((resolve) => {
+    if (pc.iceGatheringState === 'complete') return resolve();
+    const done = () => { if (pc.iceGatheringState === 'complete') { pc.removeEventListener('icegatheringstatechange', done); resolve(); } };
+    pc.addEventListener('icegatheringstatechange', done);
+    setTimeout(resolve, 5000); // don't wait forever for slow candidates
+  });
+}
+
+async function connect() {
+  const id = $('id').value.trim(), password = $('pw').value;
+  if (!id || !password) { setStatus('Enter the device ID and password'); return; }
+  disconnect();
+  setStatus('Connecting…');
+  const cfg = await fetch('config').then((r) => r.json());
+  pc = new RTCPeerConnection({ iceServers: cfg.iceServers || [] });
+  framesDc = pc.createDataChannel('frames', { ordered: true });
+  framesDc.binaryType = 'arraybuffer';
+  inputDc = pc.createDataChannel('input', { ordered: true });
+  framesDc.onmessage = (e) => onChunk(e.data);
+  inputDc.onopen = () => inputDc.send(JSON.stringify({ t: 'auth', password }));
+  inputDc.onmessage = (e) => {
+    const m = JSON.parse(e.data);
+    if (m.t === 'auth') {
+      if (m.ok) { setStatus('Connected to ' + id); canvas.focus(); }
+      else { setStatus(m.locked ? 'Too many wrong passwords. Wait a minute.' : 'Wrong password'); disconnect(true); }
+    }
+  };
+  pc.onconnectionstatechange = () => {
+    const s = pc && pc.connectionState;
+    if (s === 'failed') { setStatus('Connection failed (a TURN server may be needed)'); disconnect(true); }
+    if (s === 'disconnected' || s === 'closed') { setStatus('Disconnected'); }
+  };
+
+  await pc.setLocalDescription(await pc.createOffer());
+  await waitIce(pc);
+
+  const base = location.pathname.replace(/[^/]*$/, '');
+  const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + base + 'ws');
+  ws.onopen = () => ws.send(JSON.stringify({ type: 'offer', id, sdp: pc.localDescription.sdp }));
+  ws.onmessage = async (ev) => {
+    const m = JSON.parse(ev.data);
+    if (m.type === 'answer') {
+      await pc.setRemoteDescription({ type: 'answer', sdp: m.sdp });
+      setStatus('Checking password…');
+    } else if (m.type === 'error') {
+      setStatus('Error: ' + m.message);
+      disconnect(true);
+    }
+    ws.close();
+  };
+  ws.onerror = () => setStatus('Could not reach the server');
+  $('connect').hidden = true; $('disconnect').hidden = false;
+}
+
+function disconnect(keepStatus) {
+  releaseKeys();
+  if (pc) { pc.close(); pc = null; }
+  framesDc = inputDc = null; frames.clear(); lastDrawn = -1;
+  $('connect').hidden = false; $('disconnect').hidden = true;
+  if (!keepStatus) setStatus('Not connected');
+}
+
+// Frames arrive as JPEG chunks: [u32 frameId][u16 index][u16 count][bytes]
+function onChunk(buf) {
+  const dv = new DataView(buf);
+  const fid = dv.getUint32(0), idx = dv.getUint16(4), count = dv.getUint16(6);
+  let f = frames.get(fid);
+  if (!f) { f = { parts: new Array(count), got: 0 }; frames.set(fid, f); }
+  if (!f.parts[idx]) { f.parts[idx] = buf.slice(8); f.got++; }
+  if (f.got === count) {
+    frames.delete(fid);
+    for (const k of frames.keys()) if (k < fid) frames.delete(k);
+    createImageBitmap(new Blob(f.parts, { type: 'image/jpeg' })).then((bmp) => {
+      if (fid < lastDrawn) return;
+      lastDrawn = fid;
+      if (canvas.width !== bmp.width || canvas.height !== bmp.height) { canvas.width = bmp.width; canvas.height = bmp.height; }
+      ctx.drawImage(bmp, 0, 0);
+      bmp.close();
+    }).catch(() => {});
+  }
+}
+
+function send(obj) { if (inputDc && inputDc.readyState === 'open') inputDc.send(JSON.stringify(obj)); }
+function norm(e) {
+  const r = canvas.getBoundingClientRect();
+  return { x: Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)), y: Math.min(1, Math.max(0, (e.clientY - r.top) / r.height)) };
+}
+
+// Mouse
+let pendingMove = null, wheelX = 0, wheelY = 0, rafQueued = false;
+function flush() {
+  rafQueued = false;
+  if (pendingMove) { send({ t: 'move', ...pendingMove }); pendingMove = null; }
+  if (wheelX || wheelY) { send({ t: 'wheel', dx: Math.round(wheelX), dy: Math.round(wheelY) }); wheelX = wheelY = 0; }
+}
+function queue() { if (!rafQueued) { rafQueued = true; requestAnimationFrame(flush); } }
+canvas.addEventListener('mousemove', (e) => { pendingMove = norm(e); queue(); });
+canvas.addEventListener('mousedown', (e) => { canvas.focus(); flush(); send({ t: 'down', b: e.button, n: e.detail, ...norm(e) }); e.preventDefault(); });
+canvas.addEventListener('mouseup', (e) => { flush(); send({ t: 'up', b: e.button, n: e.detail, ...norm(e) }); e.preventDefault(); });
+canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+canvas.addEventListener('wheel', (e) => {
+  const k = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1;
+  wheelX += e.deltaX * k; wheelY += e.deltaY * k; queue(); e.preventDefault();
+}, { passive: false });
+
+// Keyboard
+function mapCode(code) {
+  if ($('swap').checked) {
+    if (code === 'MetaLeft') return 'ControlLeft';
+    if (code === 'MetaRight') return 'ControlRight';
+  }
+  return code;
+}
+function keyEvent(e, down) {
+  if (e.isComposing) return;
+  e.preventDefault();
+  const code = mapCode(e.code);
+  if (down) pressed.add(code); else pressed.delete(code);
+  send({ t: 'key', code, key: e.key, down });
+}
+function releaseKeys() { for (const code of pressed) send({ t: 'key', code, key: '', down: false }); pressed.clear(); }
+canvas.addEventListener('keydown', (e) => keyEvent(e, true));
+canvas.addEventListener('keyup', (e) => keyEvent(e, false));
+canvas.addEventListener('blur', releaseKeys);
+
+$('connect').onclick = () => connect().catch((err) => { setStatus('Error: ' + err.message); disconnect(true); });
+$('disconnect').onclick = () => disconnect();
+$('pw').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('connect').click(); });
+</script>
+</body>
+</html>

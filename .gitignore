@@ -1,0 +1,12 @@
+# build output
+hopdesk-server
+hopdesk-server-*
+hopdesk-agent
+hopdesk-agent.exe
+*.exe
+
+# TLS keys and certs
+*.pem
+*.key
+
+.DS_Store
