@@ -19,12 +19,12 @@ echo "Building HopDesk $VERSION for macOS"
 rm -rf "$APP" "$OUT/dmg" "$OUT/HopDesk.iconset" "$DMG"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 
-export CGO_ENABLED=1 MACOSX_DEPLOYMENT_TARGET=11.0
+export CGO_ENABLED=1 MACOSX_DEPLOYMENT_TARGET=13.0
 LDFLAGS="-s -w -X main.version=$VERSION"
 for arch in arm64 amd64; do
   carch=$arch; [ "$arch" = amd64 ] && carch=x86_64
   GOOS=darwin GOARCH=$arch CC="clang -arch $carch" \
-    CGO_CFLAGS="-mmacosx-version-min=11.0" CGO_LDFLAGS="-mmacosx-version-min=11.0" \
+    CGO_CFLAGS="-mmacosx-version-min=13.0" CGO_LDFLAGS="-mmacosx-version-min=13.0" \
     go build -trimpath -ldflags "$LDFLAGS" -o "$OUT/hopdesk-$arch" ./cmd/agent
 done
 lipo -create -output "$APP/Contents/MacOS/HopDesk" "$OUT/hopdesk-arm64" "$OUT/hopdesk-amd64"
