@@ -7,9 +7,32 @@
 // server and real viewer can be tested end to end. It "shares" a demo desktop
 // drawn on a canvas and records everything the viewer sends.
 const params = new URLSearchParams(location.search);
+// Speaks the same protocol as the Go agent, including the identity signature
+// and password proof, so the real viewer can be tested (and attacked) end to end.
 const KEY = params.get('key'), ID = params.get('id') || 'studio-mac', PASSWORD = 'correct-horse-42';
 const WS = 'ws://127.0.0.1:8080/ws';
 window.__log = []; window.__settings = null; window.__clip = null; window.__uploads = []; window.__registered = false;
+window.__auth2Count = 0;      // how many password proofs this agent received
+window.__simulateMitm = false; // sign a different connection binding, as the real agent would behind a man in the middle
+
+// ---------- identity and password key (same steps as internal/auth) ----------
+const te = new TextEncoder();
+const b64 = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf)));
+const unb64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+const SALT = crypto.getRandomValues(new Uint8Array(16)), ITER = 100000;
+const identityP = crypto.subtle.generateKey({ name: 'Ed25519' }, true, ['sign', 'verify']);
+const keyP = (async () => {
+  const base = await crypto.subtle.importKey('raw', te.encode(PASSWORD), 'PBKDF2', false, ['deriveBits']);
+  const k = await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt: SALT, iterations: ITER }, base, 256);
+  return crypto.subtle.importKey('raw', k, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+})();
+const fpOf = (sdp) => /^a=fingerprint:sha-256 ([0-9a-f:]+)\s*$/im.exec(sdp)[1].toUpperCase();
+(async () => {
+  const id = await identityP;
+  window.__pub = b64(await crypto.subtle.exportKey('raw', id.publicKey));
+  const h = new Uint8Array(await crypto.subtle.digest('SHA-256', unb64(window.__pub)));
+  window.__fingerprint = Array.from(h.slice(0, 16), (x) => x.toString(16).padStart(2, '0')).join('').toUpperCase().match(/.{4}/g).join(' ');
+})();
 
 // ---------- demo desktop ----------
 const c = document.getElementById('c'), g = c.getContext('2d');
@@ -104,12 +127,24 @@ async function answerOffer(offerSdp, ice) {
   pc.ondatachannel = ({ channel: dc }) => {
     if (dc.label === 'input') {
       ctrl = dc;
-      dc.onmessage = (e) => {
+      let nonceV = '', nonceA = '', binding = '';
+      dc.onmessage = async (e) => {
         const m = JSON.parse(e.data);
-        if (m.t === 'auth') {
-          const ok = m.password === PASSWORD && failures < 5;
+        if (m.t === 'auth1') {
+          let bind = 'dtls:' + fpOf(pc.remoteDescription.sdp) + ',' + fpOf(pc.localDescription.sdp);
+          if (window.__simulateMitm) bind = bind.replace(/,.*/, ',66:66:66:66');
+          nonceV = m.nonce; nonceA = b64(crypto.getRandomValues(new Uint8Array(18))); binding = bind;
+          const id = await identityP;
+          const sig = await crypto.subtle.sign({ name: 'Ed25519' }, id.privateKey, te.encode('hopdesk-agent-v1\n' + bind + '\n' + nonceV));
+          sendCtrl({ t: 'auth1', pub: window.__pub, sig: b64(sig), nonce: nonceA, salt: b64(SALT), iter: ITER });
+          return;
+        }
+        if (m.t === 'auth2') {
+          window.__auth2Count++;
+          const expect = b64(await crypto.subtle.sign('HMAC', await keyP, te.encode('hopdesk-viewer-v1\n' + binding + '\n' + nonceV + '\n' + nonceA)));
+          const ok = m.proof === expect && failures < 5;
           if (!ok) failures++;
-          sendCtrl({ t: 'auth', ok, locked: false });
+          sendCtrl({ t: 'auth', ok, reason: ok ? undefined : 'password' });
           if (!ok) { setTimeout(() => pc.close(), 500); return; }
           authed = true; hello();
           if (tr) { // like the Go agent: no video before auth

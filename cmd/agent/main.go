@@ -1,36 +1,47 @@
 // Command agent runs on the computer you want to control. It registers with
-// the hopdesk server, answers WebRTC offers from viewers, checks the password
-// over the encrypted data channel, then streams the screen (H.264 via ffmpeg,
-// or JPEG frames as a fallback), replays input, syncs the clipboard and
-// transfers files.
+// the hopdesk server and answers WebRTC offers from viewers. Over the
+// encrypted connection it proves its identity and checks the viewer's
+// password proof (see internal/auth), then streams the screen (H.264 via
+// ffmpeg, or JPEG frames), replays input, syncs the clipboard and transfers files.
 package main
 
 import (
 	"context"
+	"crypto/ed25519"
 	"crypto/rand"
-	"crypto/subtle"
+	"encoding/base64"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
 	"math/big"
+	"net"
+	"net/url"
 	"os"
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/pion/webrtc/v4"
 
+	"hopdesk/internal/auth"
 	"hopdesk/internal/proto"
 )
 
 var (
-	serverURL   = flag.String("server", "ws://localhost:8080/ws", "signaling server WebSocket URL (wss:// with TLS)")
+	serverURL   = flag.String("server", "ws://localhost:8080/ws", "signaling server URL: wss:// for anything outside your LAN/tailnet")
 	agentID     = flag.String("id", "", "device ID viewers type to reach this computer (default: hostname)")
-	password    = flag.String("password", "", "connection password (default: random, printed at start)")
-	agentKey    = flag.String("key", "", "agent key printed by the server")
+	password    = flag.String("password", "", "connection password (better: env HOPDESK_PASSWORD; default: generate and save one)")
+	resetPass   = flag.Bool("reset-password", false, "generate a new password (and forget the saved one)")
+	agentKey    = flag.String("key", "", "agent key from the server (better: env HOPDESK_KEY)")
+	stateFile   = flag.String("state", "", "where to keep this agent's identity (default: user config folder)")
+	insecureWS  = flag.Bool("insecure-ws", false, "allow plain ws:// to a public address (not recommended)")
+	confirmFlag = flag.Bool("confirm", false, "ask the person at this computer to approve each connection")
+	idleTimeout = flag.Duration("idle", 30*time.Minute, "disconnect viewers after this long without input (0 = never)")
+	clipMode    = flag.String("clipboard", "both", "clipboard sync: both, to-remote (viewer -> this computer only) or off")
 	defFPS      = flag.Int("fps", 15, "starting frames per second (5, 10, 15, 20 or 30)")
 	defQuality  = flag.String("quality", "medium", "starting quality: low, medium or high")
 	defDisplay  = flag.Int("display", 0, "display to show first")
@@ -38,6 +49,15 @@ var (
 	ffmpegPath  = flag.String("ffmpeg", "ffmpeg", "path to the ffmpeg program")
 	encoderFlag = flag.String("encoder", "", "ffmpeg H.264 encoder (default: best available, e.g. h264_videotoolbox or libx264)")
 	uploadDir   = flag.String("upload-dir", "", "folder for files sent from the viewer (default: ~/Downloads)")
+)
+
+// Identity and password key, set up in main.
+var (
+	identity ed25519.PrivateKey
+	pubB64   string
+	pwKey    []byte
+	pwSalt   string
+	pwIter   int
 )
 
 // Quality presets: max frame width, JPEG quality, H.264 bitrate.
@@ -77,46 +97,27 @@ func (s *sigConn) send(m proto.Msg) {
 	}
 }
 
-// ---- password lockout ----
-
-var lock struct {
-	sync.Mutex
-	failures int
-	until    time.Time
-}
-
-// checkPassword returns (ok, locked).
-func checkPassword(p string) (bool, bool) {
-	lock.Lock()
-	defer lock.Unlock()
-	if time.Now().Before(lock.until) {
-		return false, true
-	}
-	if subtle.ConstantTimeCompare([]byte(p), []byte(*password)) == 1 {
-		lock.failures = 0
-		return true, false
-	}
-	lock.failures++
-	if lock.failures >= 5 {
-		lock.failures = 0
-		lock.until = time.Now().Add(time.Minute)
-		log.Printf("5 wrong passwords: refusing connections for 1 minute")
-	}
-	return false, false
-}
-
 // ---- sessions ----
 
 type session struct {
 	id     string
+	from   string // viewer's IP as seen by the server
 	pc     *webrtc.PeerConnection
 	ctx    context.Context
 	cancel context.CancelFunc
 	track  *webrtc.TrackLocalStaticRTP
 	rtp    rtpState // only touched by the single running H.264 forwarder
 
+	closeOnce  sync.Once
+	lastActive atomic.Int64
+
 	mu         sync.Mutex
 	mode       string // "h264" or "jpeg"
+	nonceV     string
+	nonceA     string
+	binding    string
+	auth1Done  bool
+	auth2Done  bool
 	authed     bool
 	started    bool
 	frames     *webrtc.DataChannel
@@ -178,7 +179,7 @@ func (s *session) sendHello() {
 	home, _ := os.UserHomeDir()
 	s.sendCtrl(map[string]any{
 		"t": "hello", "mode": s.getMode(), "displays": ds, "settings": set,
-		"home": home, "os": runtime.GOOS, "id": *agentID,
+		"home": home, "os": runtime.GOOS, "id": *agentID, "clipboard": *clipMode,
 	})
 }
 
@@ -213,54 +214,66 @@ func (s *session) fallbackToJPEG() {
 }
 
 func (s *session) close() {
-	s.cancel()
-	_ = s.pc.Close()
+	s.closeOnce.Do(func() {
+		s.cancel()
+		_ = s.pc.Close()
+		authed := s.isAuthed()
+		releaseSession(!authed)
+		if authed {
+			log.Printf("session %s: ended", s.short())
+			notify("hopdesk", "Remote session from "+s.from+" ended")
+		}
+	})
 }
 
 type ctrlMsg struct {
-	T        string  `json:"t"`
-	Password string  `json:"password"`
-	X        float64 `json:"x"`
-	Y        float64 `json:"y"`
-	B        int     `json:"b"`
-	N        int     `json:"n"`
-	DX       float64 `json:"dx"`
-	DY       float64 `json:"dy"`
-	Code     string  `json:"code"`
-	Key      string  `json:"key"`
-	Down     bool    `json:"down"`
-	Text     string  `json:"text"`
-	Path     string  `json:"path"`
-	Req      int     `json:"req"`
-	Display  int     `json:"display"`
-	Quality  string  `json:"quality"`
-	FPS      int     `json:"fps"`
+	T       string  `json:"t"`
+	Nonce   string  `json:"nonce"`
+	Proof   string  `json:"proof"`
+	X       float64 `json:"x"`
+	Y       float64 `json:"y"`
+	B       int     `json:"b"`
+	N       int     `json:"n"`
+	DX      float64 `json:"dx"`
+	DY      float64 `json:"dy"`
+	Code    string  `json:"code"`
+	Key     string  `json:"key"`
+	Down    bool    `json:"down"`
+	Text    string  `json:"text"`
+	Path    string  `json:"path"`
+	Req     int     `json:"req"`
+	Display int     `json:"display"`
+	Quality string  `json:"quality"`
+	FPS     int     `json:"fps"`
+}
+
+func randB64(n int) string {
+	b := make([]byte, n)
+	if _, err := rand.Read(b); err != nil {
+		panic(err)
+	}
+	return base64.StdEncoding.EncodeToString(b)
+}
+
+// reject tells the viewer why and closes the connection shortly after.
+func (s *session) reject(reason string) {
+	s.sendCtrl(map[string]any{"t": "auth", "ok": false, "reason": reason})
+	time.AfterFunc(time.Second, s.close)
 }
 
 func (s *session) handleCtrl(m ctrlMsg) {
-	if m.T == "auth" {
-		if s.isAuthed() {
-			return
-		}
-		ok, locked := checkPassword(m.Password)
-		s.sendCtrl(map[string]any{"t": "auth", "ok": ok, "locked": locked})
-		if !ok {
-			log.Printf("session %s: wrong password", s.short())
-			time.AfterFunc(time.Second, s.close)
-			return
-		}
-		log.Printf("session %s: viewer authenticated (%s video)", s.short(), s.getMode())
-		s.mu.Lock()
-		s.authed = true
-		s.mu.Unlock()
-		s.sendHello()
-		go watchClipboard(s)
-		s.maybeStart()
+	switch m.T {
+	case "auth1":
+		s.authStep1(m)
+		return
+	case "auth2":
+		s.authStep2(m)
 		return
 	}
 	if !s.isAuthed() {
 		return
 	}
+	s.lastActive.Store(time.Now().UnixNano())
 	switch m.T {
 	case "move", "down", "up", "wheel", "key":
 		s.handleInput(m)
@@ -270,6 +283,117 @@ func (s *session) handleCtrl(m ctrlMsg) {
 		setClipboard(s, m.Text)
 	case "ls":
 		go listDir(s, m.Path, m.Req)
+	}
+}
+
+// authStep1: prove who we are, bound to this connection.
+func (s *session) authStep1(m ctrlMsg) {
+	s.mu.Lock()
+	if s.auth1Done || len(m.Nonce) < 16 || len(m.Nonce) > 128 {
+		s.mu.Unlock()
+		return
+	}
+	s.auth1Done = true
+	s.mu.Unlock()
+
+	if !guard.check(s.from) {
+		log.Printf("session %s: refused, too many wrong passwords from %s", s.short(), s.from)
+		s.reject("locked")
+		return
+	}
+	local, remote := s.pc.LocalDescription(), s.pc.RemoteDescription()
+	if local == nil || remote == nil {
+		s.reject("error")
+		return
+	}
+	binding, err := auth.Binding(remote.SDP, local.SDP)
+	if err != nil {
+		s.reject("error")
+		return
+	}
+	nA := randB64(18)
+	s.mu.Lock()
+	s.nonceV, s.nonceA, s.binding = m.Nonce, nA, binding
+	s.mu.Unlock()
+	s.sendCtrl(map[string]any{
+		"t": "auth1", "pub": pubB64, "nonce": nA, "salt": pwSalt, "iter": pwIter,
+		"sig": base64.StdEncoding.EncodeToString(auth.SignAgent(identity, binding, m.Nonce)),
+	})
+}
+
+// authStep2: check the viewer's password proof. One attempt per connection.
+func (s *session) authStep2(m ctrlMsg) {
+	s.mu.Lock()
+	if !s.auth1Done || s.auth2Done || s.binding == "" {
+		s.mu.Unlock()
+		return
+	}
+	s.auth2Done = true
+	binding, nV, nA := s.binding, s.nonceV, s.nonceA
+	s.mu.Unlock()
+
+	proof, err := base64.StdEncoding.DecodeString(m.Proof)
+	if err != nil || !auth.VerifyProof(pwKey, binding, nV, nA, proof) {
+		guard.fail(s.from)
+		log.Printf("session %s: wrong password from %s", s.short(), s.from)
+		s.reject("password")
+		return
+	}
+	guard.success(s.from)
+	if *confirmFlag {
+		go func() {
+			log.Printf("session %s: password OK, waiting for local approval", s.short())
+			if !askApproval(fmt.Sprintf("Allow a remote connection from %s?\n\nThey will be able to see this screen, control it, and access files.", s.from)) {
+				log.Printf("session %s: declined at this computer", s.short())
+				s.reject("declined")
+				return
+			}
+			s.finishAuth()
+		}()
+		return
+	}
+	s.finishAuth()
+}
+
+func (s *session) finishAuth() {
+	// Check and set under the lock so close() can't race us on the session counters.
+	s.mu.Lock()
+	if s.ctx.Err() != nil {
+		s.mu.Unlock()
+		return
+	}
+	s.authed = true
+	promoteSession()
+	s.mu.Unlock()
+	s.lastActive.Store(time.Now().UnixNano())
+	log.Printf("session %s: viewer from %s connected (%s video)", s.short(), s.from, s.getMode())
+	notify("hopdesk", "Remote session started from "+s.from)
+	s.sendCtrl(map[string]any{"t": "auth", "ok": true})
+	s.sendHello()
+	if *clipMode == "both" {
+		go watchClipboard(s)
+	}
+	if *idleTimeout > 0 {
+		go s.watchIdle()
+	}
+	s.maybeStart()
+}
+
+func (s *session) watchIdle() {
+	t := time.NewTicker(15 * time.Second)
+	defer t.Stop()
+	for {
+		select {
+		case <-s.ctx.Done():
+			return
+		case <-t.C:
+		}
+		if time.Since(time.Unix(0, s.lastActive.Load())) > *idleTimeout {
+			log.Printf("session %s: idle for %s, disconnecting", s.short(), *idleTimeout)
+			s.sendCtrl(map[string]any{"t": "bye", "reason": "idle"})
+			time.AfterFunc(time.Second, s.close)
+			return
+		}
 	}
 }
 
@@ -317,14 +441,26 @@ func (s *session) handleInput(m ctrlMsg) {
 
 func handleOffer(sig *sigConn, ice []webrtc.ICEServer, m proto.Msg) {
 	fail := func(msg string) { sig.send(proto.Msg{Type: "error", Session: m.Session, Message: msg}) }
+	if len(m.Session) < 12 {
+		return
+	}
+	if !reserveSession() {
+		fail("device is busy; try again shortly")
+		return
+	}
+	from := m.From
+	if from == "" {
+		from = "unknown"
+	}
 
 	pc, err := webrtc.NewPeerConnection(webrtc.Configuration{ICEServers: ice})
 	if err != nil {
+		releaseSession(true)
 		fail("agent error")
 		return
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	s := &session{id: m.Session, pc: pc, ctx: ctx, cancel: cancel, mode: "jpeg"}
+	s := &session{id: m.Session, from: from, pc: pc, ctx: ctx, cancel: cancel, mode: "jpeg"}
 	s.set = settings{Display: 0, Quality: "medium", FPS: 15}
 	if *defDisplay >= 0 && *defDisplay < len(listDisplays()) {
 		s.set.Display = *defDisplay
@@ -337,7 +473,6 @@ func handleOffer(sig *sigConn, ice []webrtc.ICEServer, m proto.Msg) {
 	}
 
 	pc.OnConnectionStateChange(func(st webrtc.PeerConnectionState) {
-		log.Printf("session %s: %s", s.short(), st)
 		switch st {
 		case webrtc.PeerConnectionStateFailed, webrtc.PeerConnectionStateClosed:
 			go s.close() // not inside the callback, to avoid blocking pion
@@ -358,11 +493,18 @@ func handleOffer(sig *sigConn, ice []webrtc.ICEServer, m proto.Msg) {
 			})
 		case "input":
 			s.mu.Lock()
-			s.ctrl = dc
+			first := s.ctrl == nil
+			if first {
+				s.ctrl = dc
+			}
 			s.mu.Unlock()
+			if !first {
+				_ = dc.Close()
+				return
+			}
 			dc.OnMessage(func(msg webrtc.DataChannelMessage) {
 				var cm ctrlMsg
-				if json.Unmarshal(msg.Data, &cm) == nil {
+				if len(msg.Data) <= 64<<10 && json.Unmarshal(msg.Data, &cm) == nil {
 					s.handleCtrl(cm)
 				}
 			})
@@ -375,8 +517,12 @@ func handleOffer(sig *sigConn, ice []webrtc.ICEServer, m proto.Msg) {
 		}
 	})
 
-	// Drop sessions that never authenticate.
-	time.AfterFunc(20*time.Second, func() {
+	// Drop connections that don't finish authenticating (allowing for -confirm's dialog).
+	limit := 20 * time.Second
+	if *confirmFlag {
+		limit = 60 * time.Second
+	}
+	time.AfterFunc(limit, func() {
 		if !s.isAuthed() {
 			s.close()
 		}
@@ -446,6 +592,7 @@ func runOnce() error {
 		return err
 	}
 	defer ws.Close()
+	ws.SetReadLimit(256 << 10)
 	sig := &sigConn{ws: ws}
 	sig.send(proto.Msg{Type: "register", ID: *agentID, Key: *agentKey})
 
@@ -458,7 +605,7 @@ func runOnce() error {
 		switch m.Type {
 		case "registered":
 			ice = toPionICE(m.ICEServers)
-			log.Printf("online as %q. Viewers connect with this ID and the password.", *agentID)
+			log.Printf("online as %q", *agentID)
 		case "offer":
 			go handleOffer(sig, ice, m)
 		case "error":
@@ -467,31 +614,118 @@ func runOnce() error {
 	}
 }
 
-func randomPassword() string {
+var cgnat = &net.IPNet{IP: net.IPv4(100, 64, 0, 0), Mask: net.CIDRMask(10, 32)} // Tailscale range
+
+func isPrivate(ip net.IP) bool {
+	return ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || cgnat.Contains(ip)
+}
+
+// checkServerURL refuses plain ws:// to public addresses, where the agent key
+// and connection setup would cross the internet unencrypted.
+func checkServerURL(raw string) error {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return err
+	}
+	switch u.Scheme {
+	case "wss":
+		return nil
+	case "ws":
+	default:
+		return fmt.Errorf("server URL must start with wss:// or ws://")
+	}
+	if *insecureWS {
+		log.Printf("warning: plain ws:// allowed by -insecure-ws; the agent key crosses the network unencrypted")
+		return nil
+	}
+	host := u.Hostname()
+	ips := []net.IP{net.ParseIP(host)}
+	if ips[0] == nil {
+		if ips, err = net.LookupIP(host); err != nil {
+			return fmt.Errorf("can't resolve %s: %v", host, err)
+		}
+	}
+	for _, ip := range ips {
+		if !isPrivate(ip) {
+			return fmt.Errorf("refusing plain ws:// to %s (a public address); use wss:// (or -insecure-ws)", host)
+		}
+	}
+	return nil
+}
+
+func randomPassword(n int) string {
 	const chars = "abcdefghjkmnpqrstuvwxyz23456789"
 	var sb strings.Builder
-	for i := 0; i < 10; i++ {
-		n, _ := rand.Int(rand.Reader, big.NewInt(int64(len(chars))))
-		sb.WriteByte(chars[n.Int64()])
+	for i := 0; i < n; i++ {
+		if i > 0 && i%4 == 0 {
+			sb.WriteByte('-')
+		}
+		x, _ := rand.Int(rand.Reader, big.NewInt(int64(len(chars))))
+		sb.WriteByte(chars[x.Int64()])
 	}
 	return sb.String()
 }
 
+func secretFromEnv(v *string, flagName, env string) {
+	if *v != "" {
+		log.Printf("note: -%s on the command line is visible to other users (ps) and in shell history; prefer env %s", flagName, env)
+		return
+	}
+	*v = os.Getenv(env)
+}
+
+func setupIdentity() {
+	st, err := loadState()
+	if err != nil {
+		log.Fatalf("identity: %v", err)
+	}
+	identity = st.private()
+	pubB64 = base64.StdEncoding.EncodeToString(st.public())
+	pwSalt = base64.StdEncoding.EncodeToString(st.Salt)
+	pwIter = st.Iter
+
+	switch {
+	case *password != "":
+		if len(*password) < 10 {
+			log.Fatal("password must be at least 10 characters")
+		}
+		pwKey, err = auth.DeriveKey(*password, st.Salt, st.Iter)
+	case len(st.Key) == 32 && !*resetPass:
+		pwKey = st.Key
+	default:
+		pw := randomPassword(16)
+		if pwKey, err = auth.DeriveKey(pw, st.Salt, st.Iter); err == nil {
+			st.Key = pwKey
+			err = st.save()
+		}
+		fmt.Fprintf(os.Stderr, "\nNew password for this computer (shown once, write it down):\n  %s\n\n", pw)
+	}
+	if err != nil {
+		log.Fatalf("password: %v", err)
+	}
+	fmt.Fprintf(os.Stderr, "Identity fingerprint (the viewer asks you to compare this on first connect):\n  %s\n\n", auth.Fingerprint(st.public()))
+}
+
 func main() {
 	flag.Parse()
+	secretFromEnv(agentKey, "key", "HOPDESK_KEY")
+	secretFromEnv(password, "password", "HOPDESK_PASSWORD")
 	if *agentKey == "" {
-		log.Fatal("-key is required (the server prints it when it starts)")
+		log.Fatal("the agent key is required: set HOPDESK_KEY (the server prints it when it starts)")
+	}
+	switch *clipMode {
+	case "both", "to-remote", "off":
+	default:
+		log.Fatal("-clipboard must be both, to-remote or off")
+	}
+	if err := checkServerURL(*serverURL); err != nil {
+		log.Fatal(err)
 	}
 	if *agentID == "" {
 		h, _ := os.Hostname()
 		*agentID = strings.ToLower(strings.TrimSuffix(h, ".local"))
 	}
-	if *password == "" {
-		*password = randomPassword()
-		log.Printf("no -password given; using this one for this run: %s", *password)
-	} else if len(*password) < 8 {
-		log.Fatal("-password must be at least 8 characters")
-	}
+	setupIdentity()
 	if err := platformInit(); err != nil {
 		log.Printf("warning: %v", err)
 	}

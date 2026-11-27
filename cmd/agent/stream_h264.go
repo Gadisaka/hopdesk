@@ -264,10 +264,19 @@ loop:
 // shifting sequence numbers and timestamps to continue the previous run.
 func forwardRTP(conn *net.UDPConn, track *webrtc.TrackLocalStaticRTP, st *rtpState) error {
 	buf := make([]byte, 1600)
+	var sender *net.UDPAddr // ffmpeg's address; packets from anyone else are ignored
 	for {
-		n, _, err := conn.ReadFromUDP(buf)
+		n, from, err := conn.ReadFromUDP(buf)
 		if err != nil {
 			return err
+		}
+		if !from.IP.IsLoopback() {
+			continue
+		}
+		if sender == nil {
+			sender = from
+		} else if from.Port != sender.Port {
+			continue
 		}
 		var p rtp.Packet
 		if p.Unmarshal(buf[:n]) != nil {

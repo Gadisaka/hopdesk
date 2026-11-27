@@ -47,8 +47,24 @@ func safeName(name string) string {
 		}
 		return r
 	}, strings.TrimSpace(name))
-	if name == "" || name == "." || name == ".." {
+	// Windows ignores trailing dots/spaces and treats CON, NUL, COM1… as devices.
+	name = strings.TrimRight(name, ". ")
+	if name == "" {
 		return ""
+	}
+	base := strings.ToUpper(strings.SplitN(name, ".", 2)[0])
+	switch base {
+	case "CON", "PRN", "AUX", "NUL",
+		"COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
+		"LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9":
+		name = "_" + name
+	}
+	if len(name) > 200 {
+		ext := filepath.Ext(name)
+		if len(ext) > 20 {
+			ext = ""
+		}
+		name = name[:200-len(ext)] + ext
 	}
 	return name
 }
@@ -111,6 +127,7 @@ func handleUpload(s *session, dc *webrtc.DataChannel) {
 			_ = dc.Close()
 			return
 		}
+		s.lastActive.Store(time.Now().UnixNano()) // a transfer counts as activity
 		if msg.IsString {
 			var m struct {
 				T    string `json:"t"`
@@ -223,6 +240,7 @@ func sendFile(s *session, dc *webrtc.DataChannel, p string) {
 			}
 		}
 		n, err := f.Read(buf)
+		s.lastActive.Store(time.Now().UnixNano())
 		if n > 0 {
 			if e := dc.Send(append([]byte(nil), buf[:n]...)); e != nil {
 				return

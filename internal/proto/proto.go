@@ -9,8 +9,9 @@
 //	agent  -> server : {type:"answer", session, sdp}   (or {type:"error", session, message})
 //	server -> viewer : {type:"answer", sdp}            (or {type:"error", message})
 //
-// The password is NOT sent through the server. The viewer sends it over the
-// encrypted WebRTC data channel, and the agent checks it there.
+// The password is never sent anywhere. After WebRTC connects, the agent
+// proves its identity and the viewer proves it knows the password, both tied
+// to that exact connection (see internal/auth).
 package proto
 
 type ICEServer struct {
@@ -26,5 +27,6 @@ type Msg struct {
 	Session    string      `json:"session,omitempty"`
 	SDP        string      `json:"sdp,omitempty"`
 	Message    string      `json:"message,omitempty"`
+	From       string      `json:"from,omitempty"` // viewer's IP, added by the server for per-source lockouts
 	ICEServers []ICEServer `json:"iceServers,omitempty"`
 }

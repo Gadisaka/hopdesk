@@ -12,7 +12,7 @@ const maxClip = 60000
 
 // setClipboard puts text from the viewer on this computer's clipboard.
 func setClipboard(s *session, text string) {
-	if len(text) == 0 || len(text) > maxClip {
+	if *clipMode == "off" || len(text) == 0 || len(text) > maxClip {
 		return
 	}
 	s.mu.Lock()
