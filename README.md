@@ -52,7 +52,7 @@ hopdesk is a personal alternative to RustDesk, TeamViewer and AnyDesk. You run o
 ## Quick start
 
 ```sh
-git clone https://github.com/YOUR-USERNAME/hopdesk.git && cd hopdesk
+git clone https://github.com/gadisaka/hopdesk.git && cd hopdesk
 go mod tidy
 
 # 1. the server
