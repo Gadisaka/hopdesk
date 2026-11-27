@@ -120,7 +120,7 @@ function waitIce(pc) {
 let failures = 0;
 async function answerOffer(offerSdp, ice) {
   const pc = new RTCPeerConnection({ iceServers: ice });
-  let authed = false, ctrl = null, tr = null, settings = { display: 0, quality: 'medium', fps: 15 };
+  let authed = false, ctrl = null, tr = null, settings = { display: 0, quality: 'high', fps: 30 };
   const sendCtrl = (o) => ctrl && ctrl.readyState === 'open' && ctrl.send(JSON.stringify(o));
   const hello = () => sendCtrl({ t: 'hello', mode: 'h264', displays: [{ w: 2560, h: 1600 }, { w: 1920, h: 1080 }], settings, home: '/Users/demo', os: 'darwin', id: ID });
 

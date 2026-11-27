@@ -42,8 +42,8 @@ var (
 	confirmFlag = flag.Bool("confirm", false, "ask the person at this computer to approve each connection")
 	idleTimeout = flag.Duration("idle", 30*time.Minute, "disconnect viewers after this long without input (0 = never)")
 	clipMode    = flag.String("clipboard", "both", "clipboard sync: both, to-remote (viewer -> this computer only) or off")
-	defFPS      = flag.Int("fps", 15, "starting frames per second (5, 10, 15, 20 or 30)")
-	defQuality  = flag.String("quality", "medium", "starting quality: low, medium or high")
+	defFPS      = flag.Int("fps", 30, "starting frames per second (5, 10, 15, 20, 30 or 60)")
+	defQuality  = flag.String("quality", "high", "starting quality: low, medium, high or ultra (native resolution)")
 	defDisplay  = flag.Int("display", 0, "display to show first")
 	codecFlag   = flag.String("codec", "auto", "auto, h264 or jpeg (h264 needs ffmpeg)")
 	ffmpegPath  = flag.String("ffmpeg", "ffmpeg", "path to the ffmpeg program")
@@ -51,29 +51,46 @@ var (
 	uploadDir   = flag.String("upload-dir", "", "folder for files sent from the viewer (default: ~/Downloads)")
 )
 
-// Identity and password key, set up in main.
+// Identity and password key, set up by loadIdentity.
 var (
+	agentSt  *agentState
 	identity ed25519.PrivateKey
 	pubB64   string
-	pwKey    []byte
 	pwSalt   string
 	pwIter   int
+
+	pwMu  sync.Mutex
+	pwKey []byte
 )
 
-// Quality presets: max frame width, JPEG quality, H.264 bitrate.
+func getPwKey() []byte  { pwMu.Lock(); defer pwMu.Unlock(); return pwKey }
+func setPwKey(k []byte) { pwMu.Lock(); pwKey = k; pwMu.Unlock() }
+
+// Quality presets: max frame width (0 = native, capped at 4K), JPEG quality,
+// H.264 bitrate at 30 fps (scaled for other frame rates), x264 speed preset.
 type preset struct {
 	maxW    int
 	jpegQ   int
 	bitrate int
+	x264    string
 }
 
 var presets = map[string]preset{
-	"low":    {1280, 45, 800_000},
-	"medium": {1600, 65, 2_000_000},
-	"high":   {2560, 80, 5_000_000},
+	"low":    {1280, 55, 1_500_000, "superfast"},
+	"medium": {1920, 72, 4_000_000, "superfast"},
+	"high":   {2560, 85, 8_000_000, "veryfast"},
+	"ultra":  {0, 92, 16_000_000, "veryfast"},
 }
 
-var allowedFPS = map[int]bool{5: true, 10: true, 15: true, 20: true, 30: true}
+// bitrateFor scales a preset's bitrate with the frame rate (more frames need more bits).
+func (p preset) bitrateFor(fps int) int {
+	b := p.bitrate * (fps + 30) / 60 // 30 fps -> 100%, 60 fps -> 150%, 15 fps -> 75%
+	return max(b, 500_000)
+}
+
+const maxNativeWidth = 3840
+
+var allowedFPS = map[int]bool{5: true, 10: true, 15: true, 20: true, 30: true, 60: true}
 
 type settings struct {
 	Display int    `json:"display"`
@@ -100,13 +117,14 @@ func (s *sigConn) send(m proto.Msg) {
 // ---- sessions ----
 
 type session struct {
-	id     string
-	from   string // viewer's IP as seen by the server
-	pc     *webrtc.PeerConnection
-	ctx    context.Context
-	cancel context.CancelFunc
-	track  *webrtc.TrackLocalStaticRTP
-	rtp    rtpState // only touched by the single running H.264 forwarder
+	id       string
+	from     string // viewer's IP as seen by the server
+	pc       *webrtc.PeerConnection
+	ctx      context.Context
+	cancel   context.CancelFunc
+	track    *webrtc.TrackLocalStaticRTP
+	h264High bool     // viewer's browser decodes H.264 High profile
+	rtp      rtpState // only touched by the single running H.264 forwarder
 
 	closeOnce  sync.Once
 	lastActive atomic.Int64
@@ -333,7 +351,8 @@ func (s *session) authStep2(m ctrlMsg) {
 	s.mu.Unlock()
 
 	proof, err := base64.StdEncoding.DecodeString(m.Proof)
-	if err != nil || !auth.VerifyProof(pwKey, binding, nV, nA, proof) {
+	key := getPwKey()
+	if err != nil || key == nil || !auth.VerifyProof(key, binding, nV, nA, proof) {
 		guard.fail(s.from)
 		log.Printf("session %s: wrong password from %s", s.short(), s.from)
 		s.reject("password")
@@ -461,7 +480,7 @@ func handleOffer(sig *sigConn, ice []webrtc.ICEServer, m proto.Msg) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	s := &session{id: m.Session, from: from, pc: pc, ctx: ctx, cancel: cancel, mode: "jpeg"}
-	s.set = settings{Display: 0, Quality: "medium", FPS: 15}
+	s.set = settings{Display: 0, Quality: "high", FPS: 30}
 	if *defDisplay >= 0 && *defDisplay < len(listDisplays()) {
 		s.set.Display = *defDisplay
 	}
@@ -545,6 +564,7 @@ func handleOffer(sig *sigConn, ice []webrtc.ICEServer, m proto.Msg) {
 			if sender, err := pc.AddTrack(track); err == nil {
 				s.track = track
 				s.mode = "h264"
+				s.h264High = viewerDecodesHigh(m.SDP)
 				go func() { // read RTCP so pion's interceptors keep working
 					buf := make([]byte, 1500)
 					for {
@@ -606,6 +626,7 @@ func runOnce() error {
 		case "registered":
 			ice = toPionICE(m.ICEServers)
 			log.Printf("online as %q", *agentID)
+			setStatus("online", "")
 		case "offer":
 			go handleOffer(sig, ice, m)
 		case "error":
@@ -647,7 +668,7 @@ func checkServerURL(raw string) error {
 	}
 	for _, ip := range ips {
 		if !isPrivate(ip) {
-			return fmt.Errorf("refusing plain ws:// to %s (a public address); use wss:// (or -insecure-ws)", host)
+			return fmt.Errorf("refusing unencrypted ws:// to %s (a public address); use a wss:// address", host)
 		}
 	}
 	return nil
@@ -674,40 +695,81 @@ func secretFromEnv(v *string, flagName, env string) {
 	*v = os.Getenv(env)
 }
 
-func setupIdentity() {
+// loadIdentity loads (or creates) this computer's identity and password key.
+// app: the desktop app shows a generated password in its setup page instead
+// of printing it.
+func loadIdentity(app bool) error {
 	st, err := loadState()
 	if err != nil {
-		log.Fatalf("identity: %v", err)
+		return err
 	}
+	agentSt = st
 	identity = st.private()
 	pubB64 = base64.StdEncoding.EncodeToString(st.public())
 	pwSalt = base64.StdEncoding.EncodeToString(st.Salt)
 	pwIter = st.Iter
 
 	switch {
-	case *password != "":
+	case !app && *password != "":
 		if len(*password) < 10 {
-			log.Fatal("password must be at least 10 characters")
+			return fmt.Errorf("password must be at least 10 characters")
 		}
-		pwKey, err = auth.DeriveKey(*password, st.Salt, st.Iter)
+		key, err := auth.DeriveKey(*password, st.Salt, st.Iter)
+		if err != nil {
+			return err
+		}
+		setPwKey(key)
 	case len(st.Key) == 32 && !*resetPass:
-		pwKey = st.Key
+		setPwKey(st.Key)
 	default:
 		pw := randomPassword(16)
-		if pwKey, err = auth.DeriveKey(pw, st.Salt, st.Iter); err == nil {
-			st.Key = pwKey
-			err = st.save()
+		if err := setPassword(pw); err != nil {
+			return err
 		}
-		fmt.Fprintf(os.Stderr, "\nNew password for this computer (shown once, write it down):\n  %s\n\n", pw)
+		if app {
+			setPendingPassword(pw)
+		} else {
+			fmt.Fprintf(os.Stderr, "\nNew password for this computer (shown once, write it down):\n  %s\n\n", pw)
+		}
 	}
+	if !app {
+		fmt.Fprintf(os.Stderr, "Identity fingerprint (the viewer asks you to compare this on first connect):\n  %s\n\n", identityFingerprint())
+	}
+	return nil
+}
+
+// setPassword stores the stretched key for a new password (never the password itself).
+func setPassword(pw string) error {
+	key, err := auth.DeriveKey(pw, agentSt.Salt, agentSt.Iter)
 	if err != nil {
-		log.Fatalf("password: %v", err)
+		return err
 	}
-	fmt.Fprintf(os.Stderr, "Identity fingerprint (the viewer asks you to compare this on first connect):\n  %s\n\n", auth.Fingerprint(st.public()))
+	agentSt.Key = key
+	if err := agentSt.save(); err != nil {
+		return err
+	}
+	setPwKey(key)
+	return nil
+}
+
+func identityFingerprint() string {
+	if agentSt == nil {
+		return ""
+	}
+	return auth.Fingerprint(agentSt.public())
 }
 
 func main() {
+	// Double-clicked (no arguments; old macOS adds -psn_…) or -app: desktop app.
+	if len(os.Args) == 1 || os.Args[1] == "-app" || strings.HasPrefix(os.Args[1], "-psn") {
+		runApp(len(os.Args) > 2 && os.Args[2] == "-restarted")
+		return
+	}
 	flag.Parse()
+	runCLI()
+}
+
+func runCLI() {
 	secretFromEnv(agentKey, "key", "HOPDESK_KEY")
 	secretFromEnv(password, "password", "HOPDESK_PASSWORD")
 	if *agentKey == "" {
@@ -725,7 +787,9 @@ func main() {
 		h, _ := os.Hostname()
 		*agentID = strings.ToLower(strings.TrimSuffix(h, ".local"))
 	}
-	setupIdentity()
+	if err := loadIdentity(false); err != nil {
+		log.Fatalf("identity: %v", err)
+	}
 	if err := platformInit(); err != nil {
 		log.Printf("warning: %v", err)
 	}
@@ -735,18 +799,5 @@ func main() {
 	if *codecFlag != "jpeg" {
 		h264Encoder() // detect now so the log shows which video mode is used
 	}
-
-	backoff := 2 * time.Second
-	for {
-		start := time.Now()
-		err := runOnce()
-		log.Printf("disconnected from server: %v", err)
-		if time.Since(start) > time.Minute {
-			backoff = 2 * time.Second
-		}
-		time.Sleep(backoff)
-		if backoff < 30*time.Second {
-			backoff *= 2
-		}
-	}
+	agentLoop()
 }

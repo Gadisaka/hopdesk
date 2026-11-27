@@ -7,7 +7,10 @@ import (
 	"io"
 	"log"
 	"net"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -31,10 +34,12 @@ var (
 // h264Encoder returns the ffmpeg encoder to use, or "" if H.264 isn't available.
 func h264Encoder() string {
 	encOnce.Do(func() {
-		if _, err := exec.LookPath(*ffmpegPath); err != nil {
+		path := findFFmpeg()
+		if path == "" {
 			log.Printf("video: ffmpeg not found, using JPEG frames (install ffmpeg for smoother H.264 video)")
 			return
 		}
+		*ffmpegPath = path
 		out, err := exec.Command(*ffmpegPath, "-hide_banner", "-encoders").Output()
 		if err != nil {
 			log.Printf("video: could not list ffmpeg encoders (%v), using JPEG frames", err)
@@ -66,21 +71,60 @@ func h264Encoder() string {
 	return encName
 }
 
-func ffmpegArgs(w, h, fps, bitrate, port int) []string {
+// findFFmpeg looks next to HopDesk (the Windows installer puts ffmpeg.exe
+// there), then on PATH, then where Homebrew installs it: apps opened from
+// Finder don't get the shell's PATH.
+func findFFmpeg() string {
+	if *ffmpegPath != "ffmpeg" {
+		if p, err := exec.LookPath(*ffmpegPath); err == nil {
+			return p
+		}
+		return ""
+	}
+	name := "ffmpeg"
+	if runtime.GOOS == "windows" {
+		name = "ffmpeg.exe"
+	}
+	var cands []string
+	if exe, err := os.Executable(); err == nil {
+		cands = append(cands, filepath.Join(filepath.Dir(exe), name))
+	}
+	if p, err := exec.LookPath("ffmpeg"); err == nil {
+		cands = append(cands, p)
+	}
+	cands = append(cands, "/opt/homebrew/bin/ffmpeg", "/usr/local/bin/ffmpeg")
+	for _, c := range cands {
+		if fi, err := os.Stat(c); err == nil && !fi.IsDir() {
+			return c
+		}
+	}
+	return ""
+}
+
+// ffmpegArgs builds the encoder command. high selects H.264 High profile
+// (sharper at the same bitrate) for viewers whose browser decodes it.
+func ffmpegArgs(w, h, fps int, pr preset, high bool, port int) []string {
+	br := pr.bitrateFor(fps)
+	profile := "baseline"
+	if high {
+		profile = "high"
+	}
 	a := []string{
 		"-hide_banner", "-loglevel", "error", "-nostdin",
 		"-f", "rawvideo", "-pix_fmt", "rgba", "-s", fmt.Sprintf("%dx%d", w, h),
 		"-use_wallclock_as_timestamps", "1", "-i", "pipe:0",
 		"-an", "-fps_mode", "passthrough",
 		"-c:v", encName, "-pix_fmt", "yuv420p",
-		"-g", strconv.Itoa(fps), "-bf", "0",
-		"-b:v", strconv.Itoa(bitrate), "-maxrate", strconv.Itoa(bitrate), "-bufsize", strconv.Itoa(bitrate / 2),
+		"-g", strconv.Itoa(fps * 2), "-bf", "0",
+		"-b:v", strconv.Itoa(br), "-maxrate", strconv.Itoa(br), "-bufsize", strconv.Itoa(br * 2 / 3),
 	}
 	switch encName {
 	case "libx264":
-		a = append(a, "-preset", "ultrafast", "-tune", "zerolatency", "-profile:v", "baseline")
+		a = append(a, "-preset", pr.x264, "-tune", "zerolatency", "-profile:v", profile)
 	case "h264_videotoolbox":
-		a = append(a, "-realtime", "1", "-profile:v", "baseline", "-allow_sw", "1")
+		a = append(a, "-realtime", "1", "-profile:v", profile, "-allow_sw", "1")
+	case "h264_mf":
+		a = append(a, "-scenario", "display_remoting", "-rate_control", "ld_vbr")
 	}
 	return append(a,
 		// repeat SPS/PPS before every keyframe so the browser can always start decoding
@@ -88,6 +132,14 @@ func ffmpegArgs(w, h, fps, bitrate, port int) []string {
 		"-f", "rtp", "-payload_type", "96",
 		fmt.Sprintf("rtp://127.0.0.1:%d?pkt_size=1200", port))
 }
+
+// viewerDecodesHigh reports whether the viewer's offer lists H.264
+// Constrained High (Chrome, Edge, Safari do; Firefox doesn't).
+func viewerDecodesHigh(offerSDP string) bool {
+	return highProfileRe.MatchString(offerSDP)
+}
+
+var highProfileRe = regexp.MustCompile(`(?i)profile-level-id=640c`)
 
 type rtpState struct {
 	started    bool
@@ -170,7 +222,7 @@ func encodeOnce(s *session) error {
 
 	ctx, cancel := context.WithCancel(s.ctx)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, *ffmpegPath, ffmpegArgs(w, h, set.FPS, pr.bitrate, port)...)
+	cmd := exec.CommandContext(ctx, *ffmpegPath, ffmpegArgs(w, h, set.FPS, pr, s.h264High, port)...)
 	stderr := &tailBuffer{}
 	cmd.Stderr = stderr
 	stdin, err := cmd.StdinPipe()

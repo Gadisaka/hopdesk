@@ -70,14 +70,18 @@ func captureFrame(d, maxW int) (*image.RGBA, error) {
 		return nil, fmt.Errorf("empty capture")
 	}
 	w, h := sw, sh
-	if maxW > 0 && w > maxW {
+	if maxW <= 0 {
+		maxW = maxNativeWidth
+	}
+	if w > maxW {
 		h = h * maxW / w
 		w = maxW
 	}
 	w, h = w&^1, h&^1
 	if w != sw || h != sh {
 		dst := image.NewRGBA(image.Rect(0, 0, w, h))
-		draw.ApproxBiLinear.Scale(dst, dst.Rect, img, img.Rect, draw.Src, nil)
+		// BiLinear keeps small text much crisper than ApproxBiLinear.
+		draw.BiLinear.Scale(dst, dst.Rect, img, img.Rect, draw.Src, nil)
 		return dst, nil
 	}
 	if img.Rect.Min != (image.Point{}) || img.Stride != 4*w {

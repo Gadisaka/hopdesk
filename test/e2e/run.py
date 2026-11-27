@@ -178,10 +178,11 @@ try:
             pasted = False
         check("Ctrl+V sends your clipboard to the remote", pasted)
 
+        check("starts at high quality, 30 fps", v.input_value("#quality") == "high" and v.input_value("#fps") == "30")
+        v.select_option("#quality", "ultra"); v.select_option("#fps", "60")
+        agent.wait_for_function("window.__settings && window.__settings.fps === 60", timeout=5000)
+        check("Ultra quality and 60 fps reach the agent", agent.evaluate("window.__settings")["quality"] == "ultra")
         v.select_option("#quality", "high"); v.select_option("#fps", "30")
-        agent.wait_for_function("window.__settings && window.__settings.fps === 30", timeout=5000)
-        check("quality / fps changes reach the agent", agent.evaluate("window.__settings")["quality"] == "high")
-        v.select_option("#quality", "medium"); v.select_option("#fps", "15")
         v.click("#filesBtn")
         v.locator("#list .row", has_text="Downloads").click()
         expect(v.locator("#path")).to_have_attribute("title", "/Users/demo/Downloads", timeout=5000)

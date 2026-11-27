@@ -3,12 +3,14 @@ module hopdesk
 go 1.26.0
 
 require (
+	fyne.io/systray v1.12.2
 	github.com/atotto/clipboard v0.1.4
 	github.com/gorilla/websocket v1.5.3
 	github.com/kbinani/screenshot v0.0.0-20250624051815-089614a94018
 	github.com/pion/rtp v1.10.6
 	github.com/pion/webrtc/v4 v4.2.29
 	golang.org/x/image v0.48.0
+	golang.org/x/sys v0.50.0
 )
 
 require (
@@ -34,6 +36,5 @@ require (
 	github.com/wlynxg/anet v0.0.5 // indirect
 	golang.org/x/crypto v0.48.0 // indirect
 	golang.org/x/net v0.50.0 // indirect
-	golang.org/x/sys v0.50.0 // indirect
 	golang.org/x/time v0.14.0 // indirect
 )

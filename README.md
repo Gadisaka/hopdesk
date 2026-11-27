@@ -5,8 +5,10 @@
 <p align="center">
   Your own remote desktop. Self-hosted, encrypted, and small enough to read in an afternoon.<br><br>
   <a href="#features">Features</a> •
-  <a href="#quick-start">Quick start</a> •
+  <a href="#desktop-app">Desktop app</a> •
+  <a href="#quick-start-command-line">Command line</a> •
   <a href="#build">Build</a> •
+  <a href="#video-quality">Video quality</a> •
   <a href="#connecting-across-countries">Across countries</a> •
   <a href="#file-structure">Structure</a> •
   <a href="#security">Security</a> •
@@ -15,7 +17,7 @@
 </p>
 
 <p align="center">
-  <img alt="Go 1.22+" src="https://img.shields.io/badge/Go-1.22%2B-00ADD8?logo=go&logoColor=white">
+  <img alt="Go 1.24+" src="https://img.shields.io/badge/Go-1.24%2B-00ADD8?logo=go&logoColor=white">
   <img alt="Agent: macOS | Windows" src="https://img.shields.io/badge/agent-macOS%20%7C%20Windows-555">
   <img alt="Viewer: any browser" src="https://img.shields.io/badge/viewer-any%20browser-3b82f6">
   <img alt="WebRTC" src="https://img.shields.io/badge/transport-WebRTC-8b5cf6">
@@ -24,7 +26,7 @@
 > [!CAUTION]
 > **Only use hopdesk on computers you own or have permission to access.** Anyone with a device's password can see its screen, control it, and read its files.
 
-hopdesk is a personal alternative to RustDesk, TeamViewer and AnyDesk. You run one tiny server, put an agent on the computers you want to reach, and connect from any browser. There are no accounts and no third-party cloud, and the screen goes straight from one computer to the other.
+hopdesk is a personal alternative to RustDesk, TeamViewer and AnyDesk. Install the HopDesk app on the computers you want to reach (one of them can be the server), then connect from any browser. There are no accounts and no third-party cloud, and the screen goes straight from one computer to the other.
 
 <p align="center">
   <a href="docs/images/session.png"><img src="docs/images/session.png" alt="A hopdesk session in the browser" width="860"></a>
@@ -32,7 +34,8 @@ hopdesk is a personal alternative to RustDesk, TeamViewer and AnyDesk. You run o
 
 ## Features
 
-- **Smooth H.264 video** through ffmpeg, using the Mac's hardware encoder (VideoToolbox) or x264. Without ffmpeg, it falls back to JPEG frames automatically.
+- **Desktop app for macOS and Windows**: a `.dmg` and an installer, a menu-bar/tray icon, a setup page with one-click permission prompts, start at login, and an optional built-in server.
+- **High-quality video**: H.264 up to native resolution (4K) and 60 fps, High profile on Chrome, Edge and Safari, through ffmpeg with the Mac's hardware encoder. It falls back to JPEG frames if ffmpeg isn't available.
 - **Full control**: mouse (click, drag, right-click, scroll) and keyboard with shortcuts. Cmd→Ctrl mapping for Mac-to-Windows.
 - **Multi-monitor, quality and frame rate**, switchable live from the viewer.
 - **Clipboard sync** (text) in both directions.
@@ -46,14 +49,42 @@ hopdesk is a personal alternative to RustDesk, TeamViewer and AnyDesk. You run o
 
 | Part | Runs on | Does |
 |---|---|---|
-| **Server** (`cmd/server`) | anywhere both sides can reach | lets viewers find agents by ID, serves the viewer page |
-| **Agent** (`cmd/agent`) | each computer you want to control | streams the screen, replays input, syncs clipboard, moves files |
-| **Viewer** (`cmd/server/web`) | your browser | shows the screen, sends input, file browser |
+| **Server** (`internal/server`) | anywhere both sides can reach, or built into one HopDesk app | lets viewers find agents by ID, serves the viewer page |
+| **Agent** (`cmd/agent`, the HopDesk app) | each computer you want to control | streams the screen, replays input, syncs clipboard, moves files |
+| **Viewer** (`internal/server/web`) | your browser | shows the screen, sends input, file browser |
 
-## Quick start
+## Desktop app
+
+The easiest way to use HopDesk. Download `HopDesk-…-macOS.dmg` or `HopDesk-…-Windows-Setup.exe` from the [Releases](../../releases) page, or [build them yourself](#build-the-installers).
+
+**macOS:** open the `.dmg` and drag **HopDesk** to Applications. The builds aren't notarized by Apple (that needs a paid developer account), so the first time, open it, then go to **System Settings → Privacy & Security** and click **Open Anyway**. HopDesk lives in the menu bar.
+
+**Windows:** run the installer. It installs for your user only, with no admin rights needed, and includes ffmpeg for H.264 video. Windows SmartScreen may warn about an unsigned app: click **More info → Run anyway**. HopDesk lives in the notification area by the clock.
+
+The app opens its **setup page** in your browser:
+1. **Save the password** it shows (it's shown once).
+2. **macOS:** click **Grant** for Screen Recording and Accessibility, switch HopDesk on in the window that opens, then click **Restart HopDesk**.
+3. **Choose how this computer connects:**
+   - **This computer is the server:** pick this on the computer that's on most of the time. With [Tailscale](https://tailscale.com) installed, click **Enable HTTPS with Tailscale**. The page then shows the viewer address and the server address plus agent key for your other computers.
+   - **Use a HopDesk server:** paste the server address and agent key from the server's setup page.
+4. Click **Save and restart**. The menu-bar/tray icon shows **Online as <name>**.
+
+Then open the viewer address in a browser on any of your devices, and enter the computer's name and password.
+
+<p align="center">
+  <a href="docs/images/app-setup.png"><img src="docs/images/app-setup.png" alt="HopDesk setup page: password, fingerprint, macOS permissions" width="420"></a>
+  <a href="docs/images/app-host.png"><img src="docs/images/app-host.png" alt="HopDesk setup page as the server, with Tailscale" width="420"></a>
+</p>
+
+Good to know:
+- **Unsigned Mac builds:** macOS ties the permissions to the exact build, so after updating to a new version you may need to switch Screen Recording and Accessibility off and on again. Signed builds keep them.
+- **Settings** are kept in `~/Library/Application Support/hopdesk` (macOS) or `%APPDATA%\hopdesk` (Windows), including this computer's identity. Reinstalling keeps the same fingerprint.
+- **The log** is in the same folder: **Open log** on the setup page.
+
+## Quick start (command line)
 
 ```sh
-git clone https://github.com/gadisaka/hopdesk.git && cd hopdesk
+git clone https://github.com/YOUR-USERNAME/hopdesk.git && cd hopdesk
 go mod tidy
 
 # 1. the server (secrets go in environment variables, not on the command line)
@@ -112,12 +143,50 @@ GOOS=windows GOARCH=amd64 go build -o hopdesk-agent.exe ./cmd/agent       # Wind
 | `-idle` | `30m` | disconnect viewers after this long without input (`0` = never) |
 | `-clipboard` | `both` | `both`, `to-remote` (only viewer → this computer), or `off` |
 | `-state` | user config folder | where the identity key file lives |
-| `-quality` | `medium` | `low` (1280px, 0.8 Mbps), `medium` (1600px, 2 Mbps), `high` (2560px, 5 Mbps) |
-| `-fps` | `15` | 5, 10, 15, 20 or 30 |
+| `-quality` | `high` | `low`, `medium`, `high` or `ultra` (see [Video quality](#video-quality)) |
+| `-fps` | `30` | 5, 10, 15, 20, 30 or 60 |
 | `-display` | `0` | display to show first |
 | `-codec` | `auto` | `auto`, `h264` or `jpeg` |
 | `-ffmpeg`, `-encoder` | auto | ffmpeg path and encoder override |
 | `-upload-dir` | `~/Downloads` | where files sent from the viewer are saved |
+
+### Build the installers
+
+**Automatically on GitHub:** push a version tag and GitHub Actions builds the macOS `.dmg` and the Windows installer, then attaches them to a Release:
+
+```sh
+git tag v0.3.0 && git push --tags
+```
+
+You can also run the **Build installers** workflow by hand from the Actions tab to get them as downloadable artifacts.
+
+**On your Mac:**
+
+```sh
+bash scripts/build-macos.sh                    # → dist/HopDesk-<version>-macOS.dmg
+brew install makensis && bash scripts/build-windows.sh   # → dist/HopDesk-<version>-Windows-Setup.exe
+```
+
+**Signing (optional, paid):** with an Apple Developer ID, set the `MACOS_SIGN_IDENTITY`, `APPLE_ID`, `APPLE_TEAM_ID` and `APPLE_APP_PASSWORD` secrets in the repository. The workflow then signs and notarizes the app, so there's no "Open Anyway" step and permissions survive updates.
+
+The Windows installer bundles an [LGPL build of ffmpeg](https://github.com/BtbN/FFmpeg-Builds) (its license is installed next to it). Set `WITH_FFMPEG=0` to leave it out.
+
+## Video quality
+
+The viewer starts at **High quality, 30 fps**, and you can change both while connected.
+
+| Quality | Resolution | H.264 bitrate at 30 fps |
+|---|---|---|
+| Low | up to 1280 px wide | 1.5 Mbps |
+| Medium | up to 1920 px wide | 4 Mbps |
+| High (default) | up to 2560 px wide | 8 Mbps |
+| Ultra | native resolution (up to 4K) | 16 Mbps |
+
+At 60 fps the bitrate goes up by half. On Chrome, Edge and Safari, HopDesk uses H.264 **High profile** (sharper at the same bitrate). Firefox gets Baseline. Screens are downscaled with a bilinear filter, which keeps small text readable, and frames are only sent as fast as the connection allows, so a slow link lowers the frame rate rather than adding lag.
+
+For the best picture:
+- **Install ffmpeg** on the controlled computer. The Mac app uses Homebrew's (`brew install ffmpeg`), and the Windows installer includes one.
+- **Use a fast connection:** Ultra at 60 fps needs about 25 Mbps of upload on the controlled computer.
 
 ## Connecting across countries
 
@@ -143,9 +212,15 @@ Agents use `wss://your.vps/ws`, and you open `https://your.vps`. Open TCP 443 an
 
 ## File structure
 
-- **[cmd/server](cmd/server)**: signaling server with rate limits and origin checks, plus the viewer ([index.html](cmd/server/web/index.html), [viewer.js](cmd/server/web/viewer.js))
-- **[cmd/agent](cmd/agent)**: the agent
-  - `main.go`: sessions, authentication steps, control messages
+- **[cmd/server](cmd/server)**: the standalone server command
+- **[internal/server](internal/server)**: the server itself (rate limits, origin checks) and the viewer ([index.html](internal/server/web/index.html), [viewer.js](internal/server/web/viewer.js)), shared by the command and the app
+- **[cmd/agent](cmd/agent)**: the agent, which is also the HopDesk desktop app
+  - `main.go`: sessions, authentication steps, control messages, command-line mode
+  - `app.go`, `appui.go`, [`appui/`](cmd/agent/appui): desktop app mode and its token-protected setup page
+  - `tray.go`: the menu-bar / notification-area icon
+  - `perms_darwin.go`: macOS permission checks and prompts
+  - `system_*.go`: start at login, restart, opening links
+  - `tailscale.go`: finds this computer's Tailscale name and turns on `tailscale serve`
   - `identity.go`: the agent's identity key and stored password key
   - `guard.go`: password lockouts and session caps
   - `stream_h264.go`: ffmpeg → RTP → WebRTC video
@@ -153,6 +228,7 @@ Agents use `wss://your.vps/ws`, and you open `https://your.vps`. Open TCP 443 an
   - `input_darwin.go` / `input_windows.go`: mouse and keyboard injection
   - `notify_*.go`: session notifications and the `-confirm` prompt
   - `clipboard.go`, `files.go`: clipboard sync, upload/download/browse
+- **[packaging](packaging)**, **[scripts](scripts)**, **[.github/workflows](.github/workflows)**: app icon, macOS bundle, Windows installer, build scripts and the release workflow
 - **[internal/auth](internal/auth)**: identity signatures and password proofs (standard library only, with tests)
 - **[internal/proto](internal/proto)**: signaling messages shared by server and agent
 - **[test/e2e](test/e2e)**: end-to-end and attack tests, stand-in agent, Go/browser crypto cross-check
@@ -185,10 +261,10 @@ Agents use `wss://your.vps/ws`, and you open `https://your.vps`. Open TCP 443 an
 ## Testing
 
 ```sh
-go test ./...                                   # auth, lockouts, URL policy, file names, identity file
+go test ./...                                   # auth, lockouts, URL policy, file names, identity file, setup-page security
 go build -o hopdesk-server ./cmd/server
 pip install playwright && playwright install chromium
-python3 test/e2e/run.py                         # 30 end-to-end checks, including attacks
+python3 test/e2e/run.py                         # 31 end-to-end checks, including attacks
 python3 test/e2e/crosscheck.py                  # Go and browser crypto agree exactly
 ```
 
@@ -207,6 +283,7 @@ The tests don't cover the agent's screen capture, input injection or ffmpeg on a
 - Downloads are held in browser memory until complete, so multi-GB files may fail. Uploads stream to disk.
 - The keyboard uses a US-layout physical key map, with other characters typed directly. The browser keeps a few shortcuts (Cmd+W, Cmd+Q, Cmd+Tab).
 - Windows: admin (UAC) windows and the login screen need the agent to run as administrator or as a service. macOS: works while a user is logged in.
+- On Windows, the bundled ffmpeg encodes with Media Foundation (`h264_mf`). If that fails on a particular PC, HopDesk falls back to JPEG frames: install a full ffmpeg build with x264 next to `HopDesk.exe` for the best quality.
 
 ## Security
 
@@ -224,6 +301,7 @@ How hopdesk handles each threat:
 | Being watched unnoticed | A desktop notification when a session starts and ends, optional approve/deny prompt (`-confirm`), and an idle disconnect. |
 | Clipboard attacks | The remote clipboard is only copied when you click. `-clipboard` can limit or disable sync. |
 | Secrets leaking | Secrets come from environment variables, not command-line flags (warned if used), and TURN credentials are short-lived. |
+| The app's setup page | Listens on this computer only, needs a random token for every request, and checks Host and Origin, so other websites and other users can't change settings. |
 | Malicious file names | Uploads are stripped of folders, reserved Windows names are renamed, and existing files are never overwritten. |
 
 What's still up to you:

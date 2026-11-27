@@ -10,3 +10,7 @@ hopdesk-agent.exe
 *.key
 
 .DS_Store
+
+# installer builds
+dist/
+cmd/agent/rsrc_windows_*.syso
