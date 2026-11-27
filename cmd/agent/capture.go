@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"encoding/binary"
 	"fmt"
 	"hash/crc32"
@@ -19,10 +18,14 @@ import (
 
 const chunkSize = 16000 // stays under every browser's data-channel message limit
 
+type boundsEntry struct {
+	r  image.Rectangle
+	at time.Time
+}
+
 var (
-	boundsMu     sync.Mutex
-	cachedBounds image.Rectangle
-	boundsAt     time.Time
+	boundsMu    sync.Mutex
+	boundsCache = map[int]boundsEntry{}
 )
 
 func initCapture() error {
@@ -30,78 +33,106 @@ func initCapture() error {
 	if n == 0 {
 		return fmt.Errorf("no displays found (on macOS, allow Screen Recording for this app)")
 	}
-	if *display < 0 || *display >= n {
-		return fmt.Errorf("display %d not found (have %d)", *display, n)
-	}
 	return nil
 }
 
-// displayBounds returns the shared display's position in the OS's global
-// coordinate space, refreshed every few seconds in case resolution changes.
-func displayBounds() image.Rectangle {
-	boundsMu.Lock()
-	defer boundsMu.Unlock()
-	if time.Since(boundsAt) > 3*time.Second {
-		cachedBounds = screenshot.GetDisplayBounds(*display)
-		boundsAt = time.Now()
+func listDisplays() []image.Rectangle {
+	n := screenshot.NumActiveDisplays()
+	out := make([]image.Rectangle, n)
+	for i := range out {
+		out[i] = displayBounds(i)
 	}
-	return cachedBounds
+	return out
 }
 
-func captureFrame() (*image.RGBA, error) {
-	img, err := screenshot.CaptureRect(displayBounds())
+// displayBounds returns a display's position in the OS's global coordinate
+// space, refreshed every few seconds in case the resolution changes.
+func displayBounds(d int) image.Rectangle {
+	boundsMu.Lock()
+	defer boundsMu.Unlock()
+	e, ok := boundsCache[d]
+	if !ok || time.Since(e.at) > 3*time.Second {
+		e = boundsEntry{screenshot.GetDisplayBounds(d), time.Now()}
+		boundsCache[d] = e
+	}
+	return e.r
+}
+
+// captureFrame grabs a display and returns a tightly packed RGBA image at
+// most maxW wide, with even dimensions (required by the H.264 encoder).
+func captureFrame(d, maxW int) (*image.RGBA, error) {
+	img, err := screenshot.CaptureRect(displayBounds(d))
 	if err != nil {
 		return nil, err
 	}
-	w, h := img.Bounds().Dx(), img.Bounds().Dy()
-	if *maxWidth > 0 && w > *maxWidth {
-		nh := h * *maxWidth / w
-		dst := image.NewRGBA(image.Rect(0, 0, *maxWidth, nh))
-		draw.ApproxBiLinear.Scale(dst, dst.Bounds(), img, img.Bounds(), draw.Src, nil)
+	sw, sh := img.Rect.Dx(), img.Rect.Dy()
+	if sw < 2 || sh < 2 {
+		return nil, fmt.Errorf("empty capture")
+	}
+	w, h := sw, sh
+	if maxW > 0 && w > maxW {
+		h = h * maxW / w
+		w = maxW
+	}
+	w, h = w&^1, h&^1
+	if w != sw || h != sh {
+		dst := image.NewRGBA(image.Rect(0, 0, w, h))
+		draw.ApproxBiLinear.Scale(dst, dst.Rect, img, img.Rect, draw.Src, nil)
+		return dst, nil
+	}
+	if img.Rect.Min != (image.Point{}) || img.Stride != 4*w {
+		dst := image.NewRGBA(image.Rect(0, 0, w, h))
+		draw.Draw(dst, dst.Rect, img, img.Rect.Min, draw.Src)
 		return dst, nil
 	}
 	return img, nil
 }
 
-// streamFrames sends JPEG frames as chunks: [u32 frameId][u16 index][u16 count][bytes].
+// runJPEG sends JPEG frames as chunks: [u32 frameId][u16 index][u16 count][bytes].
 // Unchanged frames are skipped, and frames are dropped while the channel is
 // backed up, so a slow link lowers the frame rate instead of adding lag.
-func streamFrames(ctx context.Context, dc *webrtc.DataChannel) {
-	interval := time.Second / time.Duration(max(1, *fps))
-	t := time.NewTicker(interval)
+func runJPEG(s *session, dc *webrtc.DataChannel) {
+	set, ver := s.getSettings()
+	t := time.NewTicker(time.Second / time.Duration(set.FPS))
 	defer t.Stop()
 
-	var frameID uint32
-	var lastSum uint32
+	var frameID, lastSum uint32
 	var buf bytes.Buffer
-	opts := &jpeg.Options{Quality: min(100, max(1, *quality))}
+	force := true
 
 	for {
 		select {
-		case <-ctx.Done():
+		case <-s.ctx.Done():
 			return
 		case <-t.C:
 		}
 		if dc.ReadyState() != webrtc.DataChannelStateOpen {
 			return
 		}
+		if cur, v := s.getSettings(); v != ver {
+			if cur.FPS != set.FPS {
+				t.Reset(time.Second / time.Duration(cur.FPS))
+			}
+			set, ver, force = cur, v, true
+		}
 		if dc.BufferedAmount() > 1<<20 {
 			continue
 		}
-		img, err := captureFrame()
+		pr := presets[set.Quality]
+		img, err := captureFrame(set.Display, pr.maxW)
 		if err != nil {
 			log.Printf("capture: %v", err)
 			time.Sleep(time.Second)
 			continue
 		}
 		sum := crc32.ChecksumIEEE(img.Pix)
-		if frameID > 0 && sum == lastSum {
+		if !force && sum == lastSum {
 			continue
 		}
-		lastSum = sum
+		lastSum, force = sum, false
 
 		buf.Reset()
-		if err := jpeg.Encode(&buf, img, opts); err != nil {
+		if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: pr.jpegQ}); err != nil {
 			continue
 		}
 		data := buf.Bytes()

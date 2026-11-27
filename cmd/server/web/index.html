@@ -5,75 +5,154 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>hopdesk</title>
 <style>
-  :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+  :root { color-scheme: dark; font-family: system-ui, sans-serif; font-size: 14px; }
+  * { box-sizing: border-box; }
   body { margin: 0; display: flex; flex-direction: column; height: 100vh; background: #111; color: #eee; }
-  header { display: flex; gap: 8px; align-items: center; padding: 8px 12px; background: #1c1c1c; flex-wrap: wrap; }
-  header input[type=text], header input[type=password] { padding: 6px 8px; border-radius: 6px; border: 1px solid #444; background: #222; color: #eee; width: 150px; }
-  button { padding: 6px 14px; border-radius: 6px; border: 0; background: #3b82f6; color: white; cursor: pointer; }
-  button.secondary { background: #444; }
-  #status { margin-left: auto; font-size: 13px; color: #aaa; }
-  label { font-size: 13px; color: #ccc; display: flex; gap: 4px; align-items: center; }
-  main { flex: 1; display: flex; align-items: center; justify-content: center; overflow: hidden; }
-  canvas { max-width: 100%; max-height: 100%; background: #000; outline: none; cursor: default; }
-  canvas:focus { box-shadow: 0 0 0 2px #3b82f6; }
+  header { display: flex; gap: 8px; align-items: center; padding: 8px 12px; background: #1c1c1c; flex-wrap: wrap; border-bottom: 1px solid #2a2a2a; }
+  input[type=text], input[type=password], select { padding: 6px 8px; border-radius: 6px; border: 1px solid #444; background: #222; color: #eee; font: inherit; }
+  input[type=text], input[type=password] { width: 140px; }
+  button { padding: 6px 12px; border-radius: 6px; border: 0; background: #3b82f6; color: white; cursor: pointer; font: inherit; }
+  button.secondary { background: #3a3a3a; }
+  button:disabled { opacity: .5; cursor: default; }
+  label { color: #ccc; display: flex; gap: 4px; align-items: center; }
+  .group { display: flex; gap: 8px; align-items: center; }
+  #status { margin-left: auto; color: #aaa; }
+  .wrap { flex: 1; display: flex; min-height: 0; }
+  #surface { flex: 1; display: flex; align-items: center; justify-content: center; overflow: hidden; outline: none; position: relative; }
+  #surface:focus-visible { box-shadow: inset 0 0 0 2px #3b82f6; }
+  #surface.drop { box-shadow: inset 0 0 0 3px #22c55e; }
+  #surface video, #surface canvas { max-width: 100%; max-height: 100%; background: #000; display: block; }
+  #hint { position: absolute; color: #666; pointer-events: none; }
+  aside { width: 340px; background: #181818; border-left: 1px solid #2a2a2a; display: flex; flex-direction: column; min-height: 0; }
+  aside h3 { margin: 0; padding: 10px 12px 6px; font-size: 13px; color: #aaa; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+  .pathbar { display: flex; gap: 6px; padding: 0 12px 8px; align-items: center; }
+  #path { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #ccc; direction: rtl; text-align: left; }
+  #list { flex: 1; overflow: auto; border-top: 1px solid #2a2a2a; }
+  .row { display: flex; gap: 8px; padding: 6px 12px; cursor: pointer; align-items: center; }
+  .row:hover { background: #242424; }
+  .row .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row .size { color: #888; font-size: 12px; }
+  .note { padding: 8px 12px; color: #888; }
+  #transfers { border-top: 1px solid #2a2a2a; max-height: 35%; overflow: auto; }
+  .xfer { padding: 6px 12px; border-bottom: 1px solid #222; }
+  .xfer .top { display: flex; justify-content: space-between; gap: 8px; }
+  .xfer .top span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .xfer progress { width: 100%; height: 6px; }
+  .xfer .msg { color: #888; font-size: 12px; overflow-wrap: anywhere; }
+  .xfer.err .msg { color: #f87171; }
+  .actions { display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid #2a2a2a; }
+  #toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: #262626; border: 1px solid #3a3a3a; padding: 8px 12px; border-radius: 8px; display: flex; gap: 10px; align-items: center; box-shadow: 0 4px 16px rgba(0,0,0,.5); }
+  [hidden] { display: none !important; }
 </style>
 </head>
 <body>
 <header>
   <strong>hopdesk</strong>
-  <input id="id" type="text" placeholder="Device ID" autocomplete="off">
-  <input id="pw" type="password" placeholder="Password" autocomplete="off">
-  <button id="connect">Connect</button>
-  <button id="disconnect" class="secondary" hidden>Disconnect</button>
-  <label title="Send Ctrl when you press Cmd (useful when a Mac controls a Windows PC)">
-    <input id="swap" type="checkbox"> Cmd&rarr;Ctrl
-  </label>
+  <div class="group" id="login">
+    <input id="id" type="text" placeholder="Device ID" autocomplete="off">
+    <input id="pw" type="password" placeholder="Password" autocomplete="off">
+    <button id="connect">Connect</button>
+  </div>
+  <div class="group" id="controls" hidden>
+    <select id="display" title="Display"></select>
+    <select id="quality" title="Quality">
+      <option value="low">Low quality</option>
+      <option value="medium">Medium quality</option>
+      <option value="high">High quality</option>
+    </select>
+    <select id="fps" title="Frames per second">
+      <option value="5">5 fps</option><option value="10">10 fps</option><option value="15">15 fps</option>
+      <option value="20">20 fps</option><option value="30">30 fps</option>
+    </select>
+    <label title="Send Ctrl when you press Cmd (for a Mac controlling a Windows PC)"><input id="swap" type="checkbox"> Cmd&rarr;Ctrl</label>
+    <button id="filesBtn" class="secondary">Files</button>
+    <button id="disconnect" class="secondary">Disconnect</button>
+  </div>
   <span id="status">Not connected</span>
 </header>
-<main><canvas id="screen" tabindex="0" width="1280" height="720"></canvas></main>
+<div class="wrap">
+  <div id="surface" tabindex="0">
+    <video id="video" autoplay muted playsinline hidden></video>
+    <canvas id="canvas" width="1280" height="720" hidden></canvas>
+    <div id="hint">Enter a device ID and password to connect</div>
+  </div>
+  <aside id="files" hidden>
+    <h3>Remote files</h3>
+    <div class="pathbar">
+      <button id="up" class="secondary" title="Up one folder">&uarr;</button>
+      <button id="home" class="secondary" title="Home folder">&#8962;</button>
+      <span id="path"></span>
+    </div>
+    <div id="list"></div>
+    <div class="actions">
+      <button id="uploadBtn">Send files&hellip;</button>
+      <input id="uploadInput" type="file" multiple hidden>
+      <span class="note" style="padding:6px 0">or drop files on the screen</span>
+    </div>
+    <div id="transfers"></div>
+  </aside>
+</div>
+<div id="toast" hidden><span id="toastText"></span><button id="toastBtn" hidden></button></div>
 
 <script>
 const $ = (id) => document.getElementById(id);
-const canvas = $('screen');
-const ctx = canvas.getContext('2d');
-let pc = null, framesDc = null, inputDc = null;
+const surface = $('surface'), video = $('video'), canvas = $('canvas');
+const ctx2d = canvas.getContext('2d');
+let pc = null, framesDc = null, ctrl = null, mode = 'jpeg', connected = false;
 let frames = new Map(), lastDrawn = -1;
 const pressed = new Set();
+let remoteHome = '', cwd = '', parentDir = '', sep = '/', lsReq = 0;
 
 function setStatus(t) { $('status').textContent = t; }
+function send(obj) { if (ctrl && ctrl.readyState === 'open') ctrl.send(JSON.stringify(obj)); }
+function active() { return mode === 'h264' ? video : canvas; }
+function fmtSize(n) { if (n < 1024) return n + ' B'; const u = ['KB','MB','GB','TB']; let i = -1; do { n /= 1024; i++; } while (n >= 1024 && i < 3); return n.toFixed(n < 10 ? 1 : 0) + ' ' + u[i]; }
+
+let toastTimer = null;
+function toast(text, btnText, onBtn, ms = 4000) {
+  $('toastText').textContent = text;
+  const b = $('toastBtn');
+  b.hidden = !btnText;
+  if (btnText) { b.textContent = btnText; b.onclick = () => { onBtn(); $('toast').hidden = true; }; }
+  $('toast').hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { $('toast').hidden = true; }, ms);
+}
 
 function waitIce(pc) {
   return new Promise((resolve) => {
     if (pc.iceGatheringState === 'complete') return resolve();
     const done = () => { if (pc.iceGatheringState === 'complete') { pc.removeEventListener('icegatheringstatechange', done); resolve(); } };
     pc.addEventListener('icegatheringstatechange', done);
-    setTimeout(resolve, 5000); // don't wait forever for slow candidates
+    setTimeout(resolve, 5000);
   });
 }
 
+// ---------- connect ----------
 async function connect() {
   const id = $('id').value.trim(), password = $('pw').value;
   if (!id || !password) { setStatus('Enter the device ID and password'); return; }
-  disconnect();
+  disconnect(true);
   setStatus('Connecting…');
   const cfg = await fetch('config').then((r) => r.json());
   pc = new RTCPeerConnection({ iceServers: cfg.iceServers || [] });
+  pc.addTransceiver('video', { direction: 'recvonly' });
+  pc.ontrack = (e) => {
+    video.srcObject = e.streams[0] || new MediaStream([e.track]);
+    try { e.receiver.playoutDelayHint = 0; } catch (_) {}
+    try { e.receiver.jitterBufferTarget = 0; } catch (_) {}
+  };
   framesDc = pc.createDataChannel('frames', { ordered: true });
   framesDc.binaryType = 'arraybuffer';
-  inputDc = pc.createDataChannel('input', { ordered: true });
   framesDc.onmessage = (e) => onChunk(e.data);
-  inputDc.onopen = () => inputDc.send(JSON.stringify({ t: 'auth', password }));
-  inputDc.onmessage = (e) => {
-    const m = JSON.parse(e.data);
-    if (m.t === 'auth') {
-      if (m.ok) { setStatus('Connected to ' + id); canvas.focus(); }
-      else { setStatus(m.locked ? 'Too many wrong passwords. Wait a minute.' : 'Wrong password'); disconnect(true); }
-    }
-  };
+  ctrl = pc.createDataChannel('input', { ordered: true });
+  ctrl.onopen = () => send({ t: 'auth', password });
+  ctrl.onmessage = (e) => onCtrl(JSON.parse(e.data));
   pc.onconnectionstatechange = () => {
     const s = pc && pc.connectionState;
-    if (s === 'failed') { setStatus('Connection failed (a TURN server may be needed)'); disconnect(true); }
-    if (s === 'disconnected' || s === 'closed') { setStatus('Disconnected'); }
+    if (s === 'failed') { setStatus('Connection failed (a TURN relay may be needed)'); disconnect(true); }
+    else if (s === 'disconnected') setStatus('Connection interrupted…');
+    else if (s === 'connected' && connected) setStatus('Connected to ' + id);
   };
 
   await pc.setLocalDescription(await pc.createOffer());
@@ -84,54 +163,91 @@ async function connect() {
   ws.onopen = () => ws.send(JSON.stringify({ type: 'offer', id, sdp: pc.localDescription.sdp }));
   ws.onmessage = async (ev) => {
     const m = JSON.parse(ev.data);
-    if (m.type === 'answer') {
-      await pc.setRemoteDescription({ type: 'answer', sdp: m.sdp });
-      setStatus('Checking password…');
-    } else if (m.type === 'error') {
-      setStatus('Error: ' + m.message);
-      disconnect(true);
-    }
     ws.close();
+    if (!pc) return;
+    if (m.type === 'answer') { await pc.setRemoteDescription({ type: 'answer', sdp: m.sdp }); setStatus('Checking password…'); }
+    else { setStatus('Error: ' + m.message); disconnect(true); }
   };
   ws.onerror = () => setStatus('Could not reach the server');
-  $('connect').hidden = true; $('disconnect').hidden = false;
 }
 
 function disconnect(keepStatus) {
   releaseKeys();
-  if (pc) { pc.close(); pc = null; }
-  framesDc = inputDc = null; frames.clear(); lastDrawn = -1;
-  $('connect').hidden = false; $('disconnect').hidden = true;
+  if (pc) pc.close();
+  pc = framesDc = ctrl = null; connected = false; helloSeen = false;
+  cwd = ''; $('list').innerHTML = ''; $('transfers').innerHTML = '';
+  frames.clear(); lastDrawn = -1;
+  video.srcObject = null; video.hidden = true; canvas.hidden = true;
+  $('hint').hidden = false; $('hint').textContent = 'Enter a device ID and password to connect';
+  $('login').hidden = false; $('controls').hidden = true; $('files').hidden = true;
   if (!keepStatus) setStatus('Not connected');
 }
 
-// Frames arrive as JPEG chunks: [u32 frameId][u16 index][u16 count][bytes]
+// ---------- control channel ----------
+function onCtrl(m) {
+  switch (m.t) {
+    case 'auth':
+      if (!m.ok) { setStatus(m.locked ? 'Too many wrong passwords. Wait a minute.' : 'Wrong password'); disconnect(true); return; }
+      connected = true;
+      setStatus('Connected to ' + $('id').value.trim());
+      $('login').hidden = true; $('controls').hidden = false; $('hint').hidden = true;
+      surface.focus();
+      break;
+    case 'hello': onHello(m); break;
+    case 'clip': onRemoteClip(m.text); break;
+    case 'ls': onLs(m); break;
+  }
+}
+
+let helloSeen = false;
+function onHello(m) {
+  mode = m.mode;
+  video.hidden = mode !== 'h264';
+  canvas.hidden = mode === 'h264';
+  const sel = $('display');
+  sel.innerHTML = '';
+  m.displays.forEach((d, i) => sel.add(new Option(`Display ${i + 1} (${d.w}×${d.h})`, i)));
+  sel.hidden = m.displays.length < 2;
+  sel.value = m.settings.display;
+  $('quality').value = m.settings.quality;
+  $('fps').value = m.settings.fps;
+  remoteHome = m.home;
+  if (!helloSeen) {
+    helloSeen = true;
+    if (m.os === 'windows' && /Mac/.test(navigator.platform)) $('swap').checked = true;
+  }
+  $('controls').title = mode === 'h264' ? 'H.264 video' : 'JPEG frames (install ffmpeg on the remote for smoother video)';
+}
+function sendSettings() {
+  send({ t: 'settings', display: +$('display').value, quality: $('quality').value, fps: +$('fps').value });
+  surface.focus();
+}
+['display', 'quality', 'fps'].forEach((id) => $(id).addEventListener('change', sendSettings));
+
+// ---------- JPEG frames: [u32 frameId][u16 index][u16 count][bytes] ----------
 function onChunk(buf) {
   const dv = new DataView(buf);
   const fid = dv.getUint32(0), idx = dv.getUint16(4), count = dv.getUint16(6);
   let f = frames.get(fid);
   if (!f) { f = { parts: new Array(count), got: 0 }; frames.set(fid, f); }
   if (!f.parts[idx]) { f.parts[idx] = buf.slice(8); f.got++; }
-  if (f.got === count) {
-    frames.delete(fid);
-    for (const k of frames.keys()) if (k < fid) frames.delete(k);
-    createImageBitmap(new Blob(f.parts, { type: 'image/jpeg' })).then((bmp) => {
-      if (fid < lastDrawn) return;
-      lastDrawn = fid;
-      if (canvas.width !== bmp.width || canvas.height !== bmp.height) { canvas.width = bmp.width; canvas.height = bmp.height; }
-      ctx.drawImage(bmp, 0, 0);
-      bmp.close();
-    }).catch(() => {});
-  }
+  if (f.got !== count) return;
+  frames.delete(fid);
+  for (const k of frames.keys()) if (k < fid) frames.delete(k);
+  createImageBitmap(new Blob(f.parts, { type: 'image/jpeg' })).then((bmp) => {
+    if (fid < lastDrawn) return;
+    lastDrawn = fid;
+    if (canvas.width !== bmp.width || canvas.height !== bmp.height) { canvas.width = bmp.width; canvas.height = bmp.height; }
+    ctx2d.drawImage(bmp, 0, 0);
+    bmp.close();
+  }).catch(() => {});
 }
 
-function send(obj) { if (inputDc && inputDc.readyState === 'open') inputDc.send(JSON.stringify(obj)); }
+// ---------- mouse ----------
 function norm(e) {
-  const r = canvas.getBoundingClientRect();
+  const r = active().getBoundingClientRect();
   return { x: Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)), y: Math.min(1, Math.max(0, (e.clientY - r.top) / r.height)) };
 }
-
-// Mouse
 let pendingMove = null, wheelX = 0, wheelY = 0, rafQueued = false;
 function flush() {
   rafQueued = false;
@@ -139,16 +255,17 @@ function flush() {
   if (wheelX || wheelY) { send({ t: 'wheel', dx: Math.round(wheelX), dy: Math.round(wheelY) }); wheelX = wheelY = 0; }
 }
 function queue() { if (!rafQueued) { rafQueued = true; requestAnimationFrame(flush); } }
-canvas.addEventListener('mousemove', (e) => { pendingMove = norm(e); queue(); });
-canvas.addEventListener('mousedown', (e) => { canvas.focus(); flush(); send({ t: 'down', b: e.button, n: e.detail, ...norm(e) }); e.preventDefault(); });
-canvas.addEventListener('mouseup', (e) => { flush(); send({ t: 'up', b: e.button, n: e.detail, ...norm(e) }); e.preventDefault(); });
-canvas.addEventListener('contextmenu', (e) => e.preventDefault());
-canvas.addEventListener('wheel', (e) => {
+surface.addEventListener('mousemove', (e) => { if (connected) { pendingMove = norm(e); queue(); } });
+surface.addEventListener('mousedown', (e) => { surface.focus(); if (!connected) return; flush(); send({ t: 'down', b: e.button, n: e.detail, ...norm(e) }); e.preventDefault(); });
+surface.addEventListener('mouseup', (e) => { if (!connected) return; flush(); send({ t: 'up', b: e.button, n: e.detail, ...norm(e) }); e.preventDefault(); });
+surface.addEventListener('contextmenu', (e) => e.preventDefault());
+surface.addEventListener('wheel', (e) => {
+  if (!connected) return;
   const k = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1;
   wheelX += e.deltaX * k; wheelY += e.deltaY * k; queue(); e.preventDefault();
 }, { passive: false });
 
-// Keyboard
+// ---------- keyboard ----------
 function mapCode(code) {
   if ($('swap').checked) {
     if (code === 'MetaLeft') return 'ControlLeft';
@@ -156,17 +273,160 @@ function mapCode(code) {
   }
   return code;
 }
+let pendingPaste = null;
+function sendPendingPaste() {
+  if (!pendingPaste) return;
+  const p = pendingPaste; pendingPaste = null;
+  send({ t: 'key', code: p.code, key: p.key, down: true });
+}
 function keyEvent(e, down) {
-  if (e.isComposing) return;
-  e.preventDefault();
+  if (!connected || e.isComposing) return;
   const code = mapCode(e.code);
+  if (down && code === 'KeyV' && (e.metaKey || e.ctrlKey)) {
+    // Let the browser fire 'paste' so the local clipboard is sent over first.
+    pendingPaste = { code, key: e.key };
+    pressed.add(code);
+    setTimeout(sendPendingPaste, 150);
+    return;
+  }
+  e.preventDefault();
   if (down) pressed.add(code); else pressed.delete(code);
   send({ t: 'key', code, key: e.key, down });
 }
 function releaseKeys() { for (const code of pressed) send({ t: 'key', code, key: '', down: false }); pressed.clear(); }
-canvas.addEventListener('keydown', (e) => keyEvent(e, true));
-canvas.addEventListener('keyup', (e) => keyEvent(e, false));
-canvas.addEventListener('blur', releaseKeys);
+surface.addEventListener('keydown', (e) => keyEvent(e, true));
+surface.addEventListener('keyup', (e) => keyEvent(e, false));
+surface.addEventListener('blur', releaseKeys);
+
+// ---------- clipboard ----------
+document.addEventListener('paste', (e) => {
+  if (!connected || document.activeElement !== surface) return;
+  e.preventDefault();
+  const text = e.clipboardData.getData('text/plain');
+  if (text && text.length <= 60000) send({ t: 'clip', text });
+  sendPendingPaste(); // ordered channel: the agent sets the clipboard before the key arrives
+});
+let remoteClip = '';
+function onRemoteClip(text) {
+  remoteClip = text;
+  if (navigator.clipboard && window.isSecureContext && document.hasFocus()) {
+    navigator.clipboard.writeText(text).then(() => toast('Copied from remote computer'), () => offerCopy());
+  } else offerCopy();
+}
+function offerCopy() { toast('Remote clipboard changed', 'Copy here', () => copyText(remoteClip), 8000); }
+function copyText(t) {
+  const ta = document.createElement('textarea');
+  ta.value = t; ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove();
+  surface.focus(); toast('Copied');
+}
+
+// ---------- remote file browser ----------
+function joinPath(dir, name) { return dir.endsWith(sep) ? dir + name : dir + sep + name; }
+function ls(path) { $('list').innerHTML = '<div class="note">Loading…</div>'; send({ t: 'ls', path, req: ++lsReq }); }
+function onLs(m) {
+  if (m.req !== lsReq) return;
+  const list = $('list');
+  list.innerHTML = '';
+  if (m.error) { list.innerHTML = '<div class="note"></div>'; list.firstChild.textContent = m.error; return; }
+  cwd = m.path; parentDir = m.parent; sep = m.sep;
+  $('path').textContent = cwd; $('path').title = cwd;
+  for (const e of m.entries) {
+    const row = document.createElement('div');
+    row.className = 'row';
+    row.innerHTML = '<span></span><span class="name"></span><span class="size"></span>';
+    row.children[0].textContent = e.dir ? '📁' : '📄';
+    row.children[1].textContent = e.name;
+    row.children[2].textContent = e.dir ? '' : fmtSize(e.size);
+    row.title = e.dir ? 'Open folder' : 'Download to this computer';
+    row.onclick = () => e.dir ? ls(joinPath(cwd, e.name)) : download(joinPath(cwd, e.name), e.name);
+    list.appendChild(row);
+  }
+  if (!m.entries.length) list.innerHTML = '<div class="note">Empty folder</div>';
+  if (m.truncated) { const n = document.createElement('div'); n.className = 'note'; n.textContent = 'Only the first items are shown.'; list.appendChild(n); }
+}
+$('filesBtn').onclick = () => { const f = $('files'); f.hidden = !f.hidden; if (!f.hidden && !cwd) ls(''); };
+$('up').onclick = () => ls(parentDir || cwd);
+$('home').onclick = () => ls(remoteHome);
+
+// ---------- transfers ----------
+function addTransfer(label, size) {
+  const el = document.createElement('div');
+  el.className = 'xfer';
+  el.innerHTML = '<div class="top"><span></span><span class="pct"></span></div><progress max="1" value="0"></progress><div class="msg"></div>';
+  el.querySelector('.top span').textContent = label;
+  $('transfers').prepend(el);
+  const bar = el.querySelector('progress'), pct = el.querySelector('.pct'), msg = el.querySelector('.msg');
+  let total = size;
+  return {
+    setSize(n) { total = n; },
+    progress(n) { if (total) { bar.value = n / total; pct.textContent = Math.floor(100 * n / total) + '%'; } else pct.textContent = fmtSize(n); },
+    done(t) { bar.value = 1; pct.textContent = '✓'; msg.textContent = t; },
+    fail(t) { el.classList.add('err'); pct.textContent = '✕'; msg.textContent = t; },
+  };
+}
+
+function upload(file) {
+  if (!pc || !connected) return;
+  $('files').hidden = false;
+  const row = addTransfer('↑ ' + file.name, file.size);
+  const dc = pc.createDataChannel('upload', { ordered: true });
+  dc.bufferedAmountLowThreshold = 256 * 1024;
+  dc.onopen = async () => {
+    dc.send(JSON.stringify({ t: 'meta', name: file.name, size: file.size }));
+    const CH = 16000;
+    let off = 0;
+    while (off < file.size) {
+      if (dc.readyState !== 'open') return;
+      if (dc.bufferedAmount > 1024 * 1024) { await new Promise((r) => dc.addEventListener('bufferedamountlow', r, { once: true })); continue; }
+      const buf = await file.slice(off, off + CH).arrayBuffer();
+      dc.send(buf);
+      off += buf.byteLength;
+      row.progress(off);
+    }
+    dc.send(JSON.stringify({ t: 'end' }));
+  };
+  dc.onmessage = (e) => {
+    const m = JSON.parse(e.data);
+    if (m.t === 'ok') { row.done('Saved to ' + m.path); if (!$('files').hidden && cwd) ls(cwd); }
+    else row.fail(m.message || 'failed');
+    dc.close();
+  };
+  dc.onclose = () => {};
+}
+
+function download(path, name) {
+  const row = addTransfer('↓ ' + name, 0);
+  const dc = pc.createDataChannel('download', { ordered: true });
+  dc.binaryType = 'arraybuffer';
+  const parts = [];
+  let got = 0;
+  dc.onopen = () => dc.send(JSON.stringify({ path }));
+  dc.onmessage = (e) => {
+    if (typeof e.data !== 'string') { parts.push(e.data); got += e.data.byteLength; row.progress(got); return; }
+    const m = JSON.parse(e.data);
+    if (m.t === 'meta') { row.setSize(m.size); name = m.name; }
+    else if (m.t === 'end') {
+      const url = URL.createObjectURL(new Blob(parts));
+      const a = document.createElement('a');
+      a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 30000);
+      row.done('Downloaded');
+      dc.close();
+    } else if (m.t === 'error') { row.fail(m.message); dc.close(); }
+  };
+}
+
+$('uploadBtn').onclick = () => $('uploadInput').click();
+$('uploadInput').onchange = (e) => { for (const f of e.target.files) upload(f); e.target.value = ''; };
+surface.addEventListener('dragover', (e) => { if (connected) { e.preventDefault(); surface.classList.add('drop'); } });
+surface.addEventListener('dragleave', () => surface.classList.remove('drop'));
+surface.addEventListener('drop', (e) => {
+  surface.classList.remove('drop');
+  if (!connected) return;
+  e.preventDefault();
+  for (const f of e.dataTransfer.files) upload(f);
+});
 
 $('connect').onclick = () => connect().catch((err) => { setStatus('Error: ' + err.message); disconnect(true); });
 $('disconnect').onclick = () => disconnect();
