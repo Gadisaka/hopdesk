@@ -1,125 +1,176 @@
-# hopdesk
+<p align="center">
+  <img src="docs/images/logo.svg" alt="hopdesk logo" width="112">
+</p>
+<h1 align="center">hopdesk</h1>
+<p align="center">
+  Your own remote desktop. Self-hosted, encrypted, and small enough to read in an afternoon.<br><br>
+  <a href="#features">Features</a> •
+  <a href="#quick-start">Quick start</a> •
+  <a href="#build">Build</a> •
+  <a href="#connecting-across-countries">Across countries</a> •
+  <a href="#file-structure">Structure</a> •
+  <a href="#screenshots">Screenshots</a> •
+  <a href="#testing">Testing</a>
+</p>
 
-A small, self-hosted remote desktop for your own computers. It's a personal RustDesk alternative.
+<p align="center">
+  <img alt="Go 1.22+" src="https://img.shields.io/badge/Go-1.22%2B-00ADD8?logo=go&logoColor=white">
+  <img alt="Agent: macOS | Windows" src="https://img.shields.io/badge/agent-macOS%20%7C%20Windows-555">
+  <img alt="Viewer: any browser" src="https://img.shields.io/badge/viewer-any%20browser-3b82f6">
+  <img alt="WebRTC" src="https://img.shields.io/badge/transport-WebRTC-8b5cf6">
+</p>
 
-- **Agent** (`cmd/agent`): runs on the computer you want to control (macOS or Windows). It streams the screen, replays your mouse and keyboard, syncs the clipboard and transfers files.
-- **Server** (`cmd/server`): one small signaling server. It lets the viewer find an agent by ID and serves the viewer web page. Screen data and files do **not** go through it.
-- **Viewer**: a web page served by the server. Open it in any browser, type the device ID and password, and you're in.
+> [!CAUTION]
+> **Only use hopdesk on computers you own or have permission to access.** Anyone with a device's password can see its screen, control it, and read its files.
 
-The connection is WebRTC (DTLS-encrypted, peer-to-peer when possible). The password is checked by the agent over that encrypted channel, so it never passes through the server.
+hopdesk is a personal alternative to RustDesk, TeamViewer and AnyDesk. You run one tiny server, put an agent on the computers you want to reach, and connect from any browser. There are no accounts and no third-party cloud, and the screen goes straight from one computer to the other.
 
-```
- Viewer (browser) ──► Server: "connect me to ID mymac" ◄── Agent (registered as mymac)
-        ▲                                                       │
-        └──── WebRTC: H.264 video, input, clipboard, files ─────┘
-                      (direct, or via a TURN relay)
-```
+<p align="center">
+  <a href="docs/images/session.png"><img src="docs/images/session.png" alt="A hopdesk session in the browser" width="860"></a>
+</p>
 
 ## Features
 
-- **H.264 video** through ffmpeg, using the hardware encoder on Macs (VideoToolbox) and x264 elsewhere. If ffmpeg isn't installed, the agent automatically sends JPEG frames instead.
-- **Live controls** in the viewer: pick the display (multi-monitor), quality (low/medium/high) and frame rate (5–30 fps).
-- **Clipboard sync** (text): copy on the remote and it reaches your computer. Paste with Cmd/Ctrl+V while viewing and your local clipboard is sent first.
-- **File transfer**: drop files on the screen (or use "Send files…") to send them to the remote's Downloads folder. Open **Files** to browse the remote computer and download files.
-- Mouse (including drag, right-click, scroll), keyboard with shortcuts, and a Cmd→Ctrl option for Mac-to-Windows.
+- **Smooth H.264 video** through ffmpeg, using the Mac's hardware encoder (VideoToolbox) or x264. Without ffmpeg, it falls back to JPEG frames automatically.
+- **Full control**: mouse (click, drag, right-click, scroll) and keyboard with shortcuts. Cmd→Ctrl mapping for Mac-to-Windows.
+- **Multi-monitor, quality and frame rate**, switchable live from the viewer.
+- **Clipboard sync** (text) in both directions.
+- **File transfer**: drop files on the screen to send them, or browse the remote computer and download.
+- **End-to-end encrypted** (WebRTC/DTLS). The password is checked by the agent itself and never passes through the server.
+- **Nothing to install on the viewing side.** It's a web page.
+
+## How it works
+
+<p align="center"><img src="docs/images/architecture.svg" alt="Architecture: viewer and agent find each other through the server, then talk directly over WebRTC" width="820"></p>
+
+| Part | Runs on | Does |
+|---|---|---|
+| **Server** (`cmd/server`) | anywhere both sides can reach | lets viewers find agents by ID, serves the viewer page |
+| **Agent** (`cmd/agent`) | each computer you want to control | streams the screen, replays input, syncs clipboard, moves files |
+| **Viewer** (`cmd/server/web`) | your browser | shows the screen, sends input, file browser |
+
+## Quick start
+
+```sh
+git clone https://github.com/YOUR-USERNAME/hopdesk.git && cd hopdesk
+go mod tidy
+
+# 1. the server
+go run ./cmd/server -agent-key PICK-A-LONG-SECRET
+
+# 2. the agent, on the computer to control (macOS: brew install ffmpeg for H.264)
+go run ./cmd/agent -key PICK-A-LONG-SECRET -id mymac -password 'a-strong-password'
+
+# 3. the viewer
+open http://localhost:8080      # enter "mymac" and the password
+```
+
+On a Mac, allow **Screen Recording** and **Accessibility** for Terminal (or whatever runs the agent) in **System Settings → Privacy & Security**, then restart the agent.
 
 ## Build
 
-You need Go 1.22 or newer.
+You need Go 1.22+. The Mac agent also needs the Xcode command line tools (`xcode-select --install`).
 
 ```sh
-cd hopdesk
-go mod tidy          # downloads pion/webrtc, gorilla/websocket, screenshot, clipboard, x/image
+go build -o hopdesk-server ./cmd/server                                   # server (pure Go)
+GOOS=linux GOARCH=amd64 go build -o hopdesk-server-linux ./cmd/server     # server for a Linux VPS
+go build -o hopdesk-agent ./cmd/agent                                     # Mac agent (build on the Mac)
+GOOS=windows GOARCH=amd64 go build -o hopdesk-agent.exe ./cmd/agent       # Windows agent (from any OS)
 ```
 
-**Server** (pure Go, runs anywhere):
-```sh
-go build -o hopdesk-server ./cmd/server
-GOOS=linux GOARCH=amd64 go build -o hopdesk-server-linux ./cmd/server   # for a Linux VPS
-```
+**ffmpeg** (for H.264 video, on the controlled computer): `brew install ffmpeg` on macOS, or `winget install Gyan.FFmpeg` on Windows. The agent log says which mode it picked, e.g. `video: H.264 with ffmpeg encoder h264_videotoolbox`.
 
-**Mac agent** (build on the Mac; needs the Xcode command line tools: `xcode-select --install`):
-```sh
-go build -o hopdesk-agent ./cmd/agent
-```
-
-**Windows agent** (pure Go, so you can build it on your Mac):
-```sh
-GOOS=windows GOARCH=amd64 go build -o hopdesk-agent.exe ./cmd/agent
-```
-
-### ffmpeg (for H.264 video, on the controlled computer)
-- macOS: `brew install ffmpeg`
-- Windows: `winget install Gyan.FFmpeg` (or download a build and pass `-ffmpeg C:\path\to\ffmpeg.exe`)
-
-The agent's log says which mode it uses, e.g. `video: H.264 with ffmpeg encoder h264_videotoolbox`.
-
-## Run
-
-1. **Start the server** somewhere both computers can reach (see "Across countries" below):
-   ```sh
-   ./hopdesk-server -addr :8080 -agent-key PICK-A-LONG-SECRET
-   ```
-   If you leave out `-agent-key`, it generates one and prints it. Agents need this key to register, which stops strangers from claiming your device IDs.
-
-2. **Start an agent** on each computer you want to control:
-   ```sh
-   ./hopdesk-agent -server ws://SERVER:8080/ws -key PICK-A-LONG-SECRET -id mymac -password 'a-strong-password'
-   ```
-
-3. **Connect:** open `http://SERVER:8080` in a browser, enter the ID and password, and click Connect. Click the screen to give it keyboard focus.
-
-Agent flags:
+### Server flags
 
 | Flag | Default | Meaning |
 |---|---|---|
-| `-quality` | `medium` | starting quality: `low` (1280px, 0.8 Mbps), `medium` (1600px, 2 Mbps), `high` (2560px, 5 Mbps) |
-| `-fps` | `15` | starting frame rate: 5, 10, 15, 20 or 30 |
+| `-addr` | `:8080` | listen address |
+| `-agent-key` | random, printed | secret that agents need to register |
+| `-stun` | Google's public STUN | STUN server (`""` to disable) |
+| `-turn`, `-turn-user`, `-turn-pass` | none | TURN relay for networks that block direct connections |
+| `-tls-cert`, `-tls-key` | none | serve HTTPS/WSS |
+
+### Agent flags
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `-server` | `ws://localhost:8080/ws` | server address (`wss://` with TLS) |
+| `-key` | required | the server's agent key |
+| `-id` | hostname | the ID you type in the viewer |
+| `-password` | random, printed | connection password (8+ characters) |
+| `-quality` | `medium` | `low` (1280px, 0.8 Mbps), `medium` (1600px, 2 Mbps), `high` (2560px, 5 Mbps) |
+| `-fps` | `15` | 5, 10, 15, 20 or 30 |
 | `-display` | `0` | display to show first |
 | `-codec` | `auto` | `auto`, `h264` or `jpeg` |
-| `-ffmpeg` | `ffmpeg` | path to ffmpeg |
-| `-encoder` | best available | force an ffmpeg encoder, e.g. `libx264` |
+| `-ffmpeg`, `-encoder` | auto | ffmpeg path and encoder override |
 | `-upload-dir` | `~/Downloads` | where files sent from the viewer are saved |
 
-### macOS permissions (on the controlled Mac)
-The first time the agent runs, open **System Settings → Privacy & Security** and turn on, for the app that runs the agent (usually **Terminal**):
-- **Screen Recording**: without it, frames are black or show only the wallpaper
-- **Accessibility**: without it, mouse and keyboard do nothing. The agent warns you at startup.
+## Connecting across countries
 
-Restart the agent after changing these.
+Both sides must reach the server, and WebRTC must reach **each other**. Behind home routers and carrier-grade NAT, a direct path often fails.
 
-### Clipboard notes
-Browsers only let a page write to your clipboard automatically on `https://` (or `localhost`). Over plain `http://` (e.g. a Tailscale IP), the viewer shows a **Copy here** button when the remote clipboard changes. Pasting into the remote works either way. Text only, up to about 60 KB.
+**Option A: Tailscale (easiest, free).** Install Tailscale on every device, sign in with one account, run the server on any of them, and use its `100.x.y.z` address everywhere. You don't need open ports or a relay.
 
-## Across countries
+**Option B: a small VPS.** Run `hopdesk-server` with TLS plus **coturn** as a TURN relay:
 
-The viewer and agent must both reach the server, and must reach **each other** for WebRTC. Behind home routers and carrier-grade NAT (common with mobile and many ISPs), a direct path often fails, and you need a relay.
-
-**Option A: Tailscale (easiest, free).** Install Tailscale on every device and sign in with one account. Run the server on any of them and use its Tailscale IP (`100.x.y.z`) everywhere:
-```sh
-./hopdesk-agent -server ws://100.x.y.z:8080/ws ...
-```
-WebRTC then connects directly over Tailscale. You don't need a TURN server or open ports.
-
-**Option B: a small VPS (no VPN on the devices).** Run `hopdesk-server` and **coturn** (a TURN relay) on a cheap VPS:
 ```sh
 ./hopdesk-server -addr :443 -tls-cert cert.pem -tls-key key.pem \
   -agent-key ... -turn turn:your.vps:3478 -turn-user hop -turn-pass ...
 ```
-Use `wss://your.vps/ws` for agents and `https://your.vps` for the viewer. Always use TLS here. Open TCP 443 and TCP/UDP 3478 (plus coturn's relay port range).
+
+Agents use `wss://your.vps/ws`, and you open `https://your.vps`. Open TCP 443 and TCP/UDP 3478 (plus coturn's relay ports).
+
+## File structure
+
+- **[cmd/server](cmd/server)**: signaling server, plus the viewer page embedded from [cmd/server/web](cmd/server/web)
+- **[cmd/agent](cmd/agent)**: the agent
+  - `main.go`: sessions, password check, control messages
+  - `stream_h264.go`: ffmpeg → RTP → WebRTC video
+  - `capture.go`: screen capture, JPEG fallback stream
+  - `input_darwin.go` / `input_windows.go`: mouse and keyboard injection
+  - `clipboard.go`, `files.go`: clipboard sync, upload/download/browse
+- **[internal/proto](internal/proto)**: signaling messages shared by server and agent
+- **[test/e2e](test/e2e)**: end-to-end browser test and a stand-in agent
+- **[docs/images](docs/images)**: logo, diagram, screenshots
+
+## Screenshots
+
+**Connecting**
+
+[![Connect screen](docs/images/login.png)](docs/images/login.png)
+
+**Controlling a remote computer**
+
+[![Remote session](docs/images/session.png)](docs/images/session.png)
+
+**Browsing, downloading and sending files**
+
+[![File transfer](docs/images/files.png)](docs/images/files.png)
+
+> The screenshots come from the end-to-end test. The "remote computer" in them is a demo desktop drawn by the test's stand-in agent.
+
+## Testing
+
+`test/e2e/run.py` starts the real server and drives the real viewer in Chrome against a stand-in agent that speaks the agent protocol. It checks 25 things: agent keys and duplicate IDs, wrong passwords, video, mouse position, keyboard and modifiers, clipboard in both directions, live settings, the file browser, and byte-exact upload and download.
+
+```sh
+go build -o hopdesk-server ./cmd/server
+pip install playwright && playwright install chromium
+python3 test/e2e/run.py            # SCREENSHOTS=docs/images to refresh the screenshots
+```
+
+The test doesn't cover the Go agent itself (screen capture, input injection, ffmpeg). Check those by hand on a Mac and a Windows PC.
 
 ## Limitations
 
-- No audio. Clipboard is text only.
-- Downloads are held in browser memory until complete, so very large files (several GB) may fail. Uploads stream straight to disk.
-- The keyboard uses a US-layout physical key map. Other characters fall back to typing the character itself.
-- The browser keeps some shortcuts for itself (Cmd+W, Cmd+Q, Cmd+Tab).
-- After packet loss, H.264 video recovers at the next keyframe (within about a second).
-- Windows: the agent can't control admin (UAC) windows or the login screen unless it runs as administrator or as a service.
-- macOS: the agent only works while a user is logged in.
+- No audio. The clipboard is text only (up to about 60 KB).
+- Over plain `http://` (not localhost), browsers block automatic clipboard writes, so the viewer shows a **Copy here** button instead.
+- Downloads are held in browser memory until complete, so multi-GB files may fail. Uploads stream to disk.
+- The keyboard uses a US-layout physical key map, with other characters typed directly. The browser keeps a few shortcuts (Cmd+W, Cmd+Q, Cmd+Tab).
+- Windows: admin (UAC) windows and the login screen need the agent to run as administrator or as a service. macOS: works while a user is logged in.
 
-## Security notes
+## Security
 
-- Use a long agent key and strong passwords (8+ characters required). After 5 wrong passwords, the agent refuses connections for a minute.
-- A connected viewer can browse and download any file the agent's user can read, the same as someone sitting at that computer. Only share the password with people you'd give your computer to.
-- Prefer Tailscale or TLS. This is a personal tool and has not been audited.
+- Use a long agent key and a strong password per device. After 5 wrong passwords, the agent locks for a minute.
+- A connected viewer can browse and download any file the agent's user can read.
+- Use Tailscale or TLS outside your home network. This is a personal project and has not been audited.

@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>stand-in agent</title></head>
+<body>
+<canvas id="c" width="1600" height="1000"></canvas>
+<script>
+// A stand-in for the Go agent that speaks the same protocol, so the real
+// server and real viewer can be tested end to end. It "shares" a demo desktop
+// drawn on a canvas and records everything the viewer sends.
+const params = new URLSearchParams(location.search);
+const KEY = params.get('key'), ID = params.get('id') || 'studio-mac', PASSWORD = 'correct-horse-42';
+const WS = 'ws://127.0.0.1:8080/ws';
+window.__log = []; window.__settings = null; window.__clip = null; window.__uploads = []; window.__registered = false;
+
+// ---------- demo desktop ----------
+const c = document.getElementById('c'), g = c.getContext('2d');
+let cursor = { x: 0.62, y: 0.55 }, display = 0, typed = '';
+function rr(x, y, w, h, r) { g.beginPath(); g.roundRect(x, y, w, h, r); }
+function win(x, y, w, h, title) {
+  g.save(); g.shadowColor = 'rgba(0,0,0,.45)'; g.shadowBlur = 40; g.shadowOffsetY = 12;
+  rr(x, y, w, h, 14); g.fillStyle = '#1f2430'; g.fill(); g.restore();
+  rr(x, y, w, 40, 14); g.fillStyle = '#2a3040'; g.fill(); g.fillRect(x, y + 26, w, 14);
+  ['#ff5f57', '#febc2e', '#28c840'].forEach((col, i) => { g.beginPath(); g.arc(x + 22 + i * 22, y + 20, 7, 0, 7); g.fillStyle = col; g.fill(); });
+  g.fillStyle = '#c9d1e0'; g.font = '600 16px system-ui, sans-serif'; g.textAlign = 'center'; g.fillText(title, x + w / 2, y + 26); g.textAlign = 'left';
+}
+function draw() {
+  const W = c.width, H = c.height;
+  const bg = g.createLinearGradient(0, 0, W, H);
+  if (display === 0) { bg.addColorStop(0, '#1e3a8a'); bg.addColorStop(.55, '#6d28d9'); bg.addColorStop(1, '#db2777'); }
+  else { bg.addColorStop(0, '#064e3b'); bg.addColorStop(1, '#0e7490'); }
+  g.fillStyle = bg; g.fillRect(0, 0, W, H);
+  // menu bar
+  g.fillStyle = 'rgba(15,18,28,.55)'; g.fillRect(0, 0, W, 34);
+  g.fillStyle = '#fff'; g.font = '600 16px system-ui, sans-serif'; g.fillText('Demo desktop', 18, 23);
+  g.font = '15px system-ui, sans-serif'; g.fillStyle = '#e5e7eb';
+  ['File', 'Edit', 'View', 'Window'].forEach((m, i) => g.fillText(m, 150 + i * 64, 23));
+  g.textAlign = 'right'; g.fillText(new Date().toTimeString().slice(0, 8) + '   Display ' + (display + 1), W - 18, 23); g.textAlign = 'left';
+  // windows
+  win(120, 110, 760, 470, 'Notes');
+  g.fillStyle = '#e5e7eb'; g.font = '600 28px system-ui, sans-serif'; g.fillText('Hello from the remote computer 👋', 156, 200);
+  g.font = '19px system-ui, sans-serif'; g.fillStyle = '#aab4c8';
+  ['This is a demo desktop drawn by the hopdesk test agent.', 'Everything you see is streamed to the viewer over WebRTC,', 'and your mouse, keyboard, clipboard and files travel back.', '', 'Typed here: ' + (typed || '—')].forEach((l, i) => g.fillText(l, 156, 250 + i * 34));
+  win(940, 180, 540, 420, 'Downloads');
+  const files = [['📄', 'report.pdf', '2.4 MB'], ['🖼️', 'photo.jpg', '3.1 MB'], ['📊', 'budget-2026.xlsx', '88 KB'], ['📝', 'notes.txt', '1 KB'], ['📦', 'project.zip', '14 MB']];
+  g.font = '18px system-ui, sans-serif';
+  files.forEach(([ic, n, s], i) => { const y = 250 + i * 56; g.fillStyle = i % 2 ? 'transparent' : 'rgba(255,255,255,.04)'; g.fillRect(956, y - 30, 508, 50);
+    g.fillStyle = '#e5e7eb'; g.fillText(ic + '  ' + n, 976, y); g.fillStyle = '#8b95a8'; g.textAlign = 'right'; g.fillText(s, 1444, y); g.textAlign = 'left'; });
+  // dock
+  rr(W / 2 - 260, H - 92, 520, 74, 22); g.fillStyle = 'rgba(255,255,255,.18)'; g.fill();
+  ['#60a5fa', '#f472b6', '#34d399', '#fbbf24', '#a78bfa', '#f87171'].forEach((col, i) => { rr(W / 2 - 236 + i * 80, H - 80, 52, 52, 12); g.fillStyle = col; g.fill(); });
+  // remote cursor
+  const cx = cursor.x * W, cy = cursor.y * H;
+  g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx, cy + 26); g.lineTo(cx + 7, cy + 19); g.lineTo(cx + 18, cy + 19); g.closePath();
+  g.fillStyle = '#fff'; g.strokeStyle = '#000'; g.lineWidth = 1.5; g.fill(); g.stroke();
+}
+setInterval(draw, 66); draw();
+const stream = c.captureStream(15);
+stream.getVideoTracks()[0].contentHint = 'detail'; // screen content: keep it sharp
+
+// ---------- fake file system ----------
+const FS = {
+  '/Users/demo': [['Desktop', 1], ['Documents', 1], ['Downloads', 1], ['Projects', 1], ['todo.txt', 0, 812]],
+  '/Users/demo/Downloads': [['report.pdf', 0, 2400000], ['photo.jpg', 0, 3100000], ['budget-2026.xlsx', 0, 88000], ['notes.txt', 0, 1024], ['project.zip', 0, 14000000]],
+  '/Users/demo/Documents': [['letters', 1], ['cv.pdf', 0, 120000]],
+  '/Users/demo/Desktop': [], '/Users/demo/Projects': [['hopdesk', 1]],
+};
+function parentOf(p) { return p.lastIndexOf('/') > 0 ? p.slice(0, p.lastIndexOf('/')) : '/'; }
+
+// ---------- signaling ----------
+function register(key, id) {
+  return new Promise((resolve) => {
+    const ws = new WebSocket(WS);
+    ws.onopen = () => ws.send(JSON.stringify({ type: 'register', id, key }));
+    ws.onmessage = (e) => resolve({ ws, msg: JSON.parse(e.data) });
+    ws.onclose = () => resolve({ ws, msg: { type: 'closed' } });
+  });
+}
+window.tryRegister = async (key, id) => { const r = await register(key, id); r.ws.close(); return r.msg; };
+
+(async () => {
+  const { ws, msg } = await register(KEY, ID);
+  if (msg.type !== 'registered') { window.__registerError = msg; return; }
+  window.__registered = true;
+  const ice = msg.iceServers || [];
+  ws.onmessage = async (e) => {
+    const m = JSON.parse(e.data);
+    if (m.type !== 'offer') return;
+    const sdp = await answerOffer(m.sdp, ice);
+    ws.send(JSON.stringify({ type: 'answer', session: m.session, sdp }));
+  };
+})();
+
+function waitIce(pc) {
+  return new Promise((res) => { if (pc.iceGatheringState === 'complete') return res();
+    pc.addEventListener('icegatheringstatechange', () => pc.iceGatheringState === 'complete' && res()); setTimeout(res, 3000); });
+}
+
+let failures = 0;
+async function answerOffer(offerSdp, ice) {
+  const pc = new RTCPeerConnection({ iceServers: ice });
+  let authed = false, ctrl = null, tr = null, settings = { display: 0, quality: 'medium', fps: 15 };
+  const sendCtrl = (o) => ctrl && ctrl.readyState === 'open' && ctrl.send(JSON.stringify(o));
+  const hello = () => sendCtrl({ t: 'hello', mode: 'h264', displays: [{ w: 2560, h: 1600 }, { w: 1920, h: 1080 }], settings, home: '/Users/demo', os: 'darwin', id: ID });
+
+  pc.ondatachannel = ({ channel: dc }) => {
+    if (dc.label === 'input') {
+      ctrl = dc;
+      dc.onmessage = (e) => {
+        const m = JSON.parse(e.data);
+        if (m.t === 'auth') {
+          const ok = m.password === PASSWORD && failures < 5;
+          if (!ok) failures++;
+          sendCtrl({ t: 'auth', ok, locked: false });
+          if (!ok) { setTimeout(() => pc.close(), 500); return; }
+          authed = true; hello();
+          if (tr) { // like the Go agent: no video before auth
+            tr.sender.replaceTrack(stream.getVideoTracks()[0]);
+            const p = tr.sender.getParameters();
+            if (p.encodings && p.encodings[0]) { p.encodings[0].maxBitrate = 4_000_000; p.degradationPreference = 'maintain-resolution'; tr.sender.setParameters(p).catch(() => {}); }
+          }
+          setTimeout(() => sendCtrl({ t: 'clip', text: 'copied on the remote computer' }), 1500);
+          return;
+        }
+        if (!authed) return;
+        window.__log.push(m);
+        if (m.t === 'move' || m.t === 'down') cursor = { x: m.x, y: m.y };
+        if (m.t === 'key' && m.down && m.key.length === 1) typed += m.key;
+        if (m.t === 'key' && m.down && m.key === 'Backspace') typed = typed.slice(0, -1);
+        if (m.t === 'settings') { settings = { display: m.display, quality: m.quality, fps: m.fps }; display = m.display; window.__settings = settings; hello(); }
+        if (m.t === 'clip') window.__clip = m.text;
+        if (m.t === 'ls') {
+          const p = m.path || '/Users/demo';
+          const list = FS[p];
+          if (!list) return sendCtrl({ t: 'ls', req: m.req, path: p, parent: parentOf(p), sep: '/', error: 'open ' + p + ': no such file or directory' });
+          sendCtrl({ t: 'ls', req: m.req, path: p, parent: parentOf(p), sep: '/', entries: list.map(([name, dir, size]) => ({ name, dir: !!dir, size: size || 0 })) });
+        }
+      };
+    } else if (dc.label === 'upload') {
+      let meta = null, got = 0;
+      dc.onmessage = (e) => {
+        if (!authed) return dc.close();
+        if (typeof e.data === 'string') {
+          const m = JSON.parse(e.data);
+          if (m.t === 'meta') meta = m;
+          else if (m.t === 'end') {
+            const path = '/Users/demo/Downloads/' + meta.name;
+            window.__uploads.push({ name: meta.name, size: meta.size, got });
+            FS['/Users/demo/Downloads'].push([meta.name, 0, got]);
+            dc.send(JSON.stringify(got === meta.size ? { t: 'ok', path } : { t: 'error', message: 'transfer incomplete' }));
+          }
+        } else got += e.data.byteLength ?? e.data.size;
+      };
+    } else if (dc.label === 'download') {
+      dc.onmessage = async (e) => {
+        if (!authed) return dc.close();
+        const { path } = JSON.parse(e.data);
+        const name = path.split('/').pop();
+        const size = 300000; // deterministic test content
+        dc.send(JSON.stringify({ t: 'meta', name, size }));
+        const chunk = new Uint8Array(16000);
+        for (let off = 0; off < size; off += chunk.length) {
+          const n = Math.min(chunk.length, size - off);
+          for (let i = 0; i < n; i++) chunk[i] = (off + i) % 251;
+          while (dc.bufferedAmount > 1 << 20) await new Promise((r) => setTimeout(r, 10));
+          dc.send(chunk.slice(0, n));
+        }
+        dc.send(JSON.stringify({ t: 'end' }));
+      };
+    }
+  };
+
+  await pc.setRemoteDescription({ type: 'offer', sdp: offerSdp });
+  tr = pc.getTransceivers().find((t) => t.receiver.track.kind === 'video') || null;
+  if (tr) tr.direction = 'sendonly';
+  await pc.setLocalDescription(await pc.createAnswer());
+  await waitIce(pc);
+  return pc.localDescription.sdp;
+}
+</script>
+</body></html>
