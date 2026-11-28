@@ -69,6 +69,28 @@
     background: var(--bg-subtle); border: 1px dashed var(--border-strong);
   }
 
+  /* updates */
+  .upd { display: flex; align-items: center; gap: 14px; padding: 14px 16px; flex-wrap: wrap; }
+  .upd .ic { width: 36px; height: 36px; border-radius: 8px; border: 1px solid var(--border); display: grid; place-items: center; color: var(--fg-muted); background: var(--bg-subtle); flex: none; }
+  .upd .ic svg { width: 18px; height: 18px; }
+  .upd .ic.ok { color: var(--green); background: var(--green-bg); border-color: transparent; }
+  .upd .ic.new { color: var(--blue); background: var(--blue-bg); border-color: transparent; }
+  .upd .ic.bad { color: var(--red); background: var(--red-bg); border-color: transparent; }
+  .upd .name { flex: 1; min-width: 200px; }
+  .upd .name b { font-weight: 500; }
+  .upd .name small { display: block; color: var(--fg-muted); font-size: 13px; margin-top: 2px; }
+  .upd .name small.err { color: var(--red); }
+  .upd .link { font-size: 13px; color: var(--fg-muted); text-underline-offset: 3px; }
+  .upd .link:hover { color: var(--fg); }
+  .updbar { height: 4px; margin: 0 16px 14px; border-radius: 99px; background: var(--bg-muted); overflow: hidden; }
+  .updbar i { display: block; height: 100%; width: 0; background: var(--blue); border-radius: inherit; transition: width .3s ease; }
+  #updCard .pref { margin-top: 8px; padding-bottom: 0; }
+  .upd-pill {
+    height: 24px; padding: 0 10px; border-radius: 999px; font-size: 12.5px; font-weight: 500;
+    background: var(--blue-bg); color: var(--blue); border: 0;
+  }
+  .upd-pill:hover:not(:disabled) { background: var(--blue-bg); color: var(--blue); text-decoration: underline; text-underline-offset: 3px; }
+
   /* permissions */
   .perm { display: flex; align-items: center; gap: 14px; padding: 14px 16px; }
   .perm + .perm { border-top: 1px solid var(--border); }
@@ -146,6 +168,7 @@
     <span class="crumb-sep">/</span>
     <span class="device" id="crumbDevice"></span>
     <span class="pill" id="pill">Loading…</span>
+    <button class="upd-pill" id="updPill" hidden>Update available</button>
     <span class="spacer"></span>
     <a id="helpLink" class="guide-link" href="help.html" target="_blank"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 0 1 4.9.7c0 1.7-2.4 2.1-2.4 3.6M12 17h.01"/></svg><span>How it works</span></a>
     <div class="theme-switch" role="group" aria-label="Theme">
@@ -253,6 +276,25 @@
       <label class="pref"><div class="t"><b>Approve each connection</b><small>Someone at this computer must click Allow first.</small></div><input type="checkbox" class="switch" id="confirm"></label>
       <label class="pref" id="autostartRow"><div class="t"><b>Start at login</b><small>So you can reach this computer after a restart.</small></div><input type="checkbox" class="switch" id="startAtLogin"></label>
       <div class="pref"><div class="t"><b>Video engine</b><small id="video"></small></div></div>
+    </div>
+  </section>
+
+  <!-- updates -->
+  <section class="section card" id="updCard">
+    <div class="body">
+      <h2>Updates</h2>
+      <p class="sub">HopDesk checks for a new version once a day. Each release is signed, and HopDesk only installs one whose signature and checksum match.</p>
+      <div class="kv">
+        <div class="upd">
+          <span class="ic" id="updIcon"></span>
+          <div class="name"><b id="updTitle">Checking…</b><small id="updText"></small></div>
+          <a id="updNotes" class="link" target="_blank" rel="noopener" hidden>What's new</a>
+          <button id="updCheck" class="sm">Check now</button>
+          <button id="updInstall" class="sm primary" hidden>Install update</button>
+        </div>
+        <div class="updbar" id="updBar" hidden><i id="updBarFill"></i></div>
+      </div>
+      <label class="pref" id="updAutoRow"><div class="t"><b>Check for updates automatically</b><small>Once a day. You choose when to install.</small></div><input type="checkbox" class="switch" id="updAuto" data-nodirty></label>
     </div>
   </section>
 

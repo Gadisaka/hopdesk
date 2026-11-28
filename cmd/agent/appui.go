@@ -9,6 +9,7 @@ package main
 // which browsers won't send cross-site without a CORS preflight we never allow.
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/subtle"
 	"embed"
@@ -321,6 +322,41 @@ func (u *uiServer) api(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, map[string]bool{"ok": true})
 		go func() { time.Sleep(300 * time.Millisecond); restartSelf() }()
 
+	case "/api/update-check":
+		if ok, why := updatesSupported(); !ok {
+			writeJSON(w, 400, map[string]string{"error": why})
+			return
+		}
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+			defer cancel()
+			_ = checkForUpdate(ctx)
+		}()
+		writeJSON(w, 200, map[string]bool{"ok": true})
+
+	case "/api/update-install":
+		if busyUpdating() {
+			writeJSON(w, 409, map[string]string{"error": "an update is already in progress"})
+			return
+		}
+		if s := getUpdateState(); s.State != "available" {
+			writeJSON(w, 400, map[string]string{"error": "there is no update to install; check again"})
+			return
+		}
+		go func() { _ = installAvailableUpdate() }()
+		writeJSON(w, 200, map[string]bool{"ok": true})
+
+	case "/api/update-auto":
+		var b struct {
+			On bool `json:"on"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
+			writeJSON(w, 400, map[string]string{"error": "bad request"})
+			return
+		}
+		setAutoUpdateCheck(b.On)
+		writeJSON(w, 200, map[string]bool{"ok": true})
+
 	case "/api/quit":
 		writeJSON(w, 200, map[string]bool{"ok": true})
 		go func() { time.Sleep(300 * time.Millisecond); quitApp() }()
@@ -353,7 +389,8 @@ type uiState struct {
 		Screen        bool `json:"screen"`
 		Accessibility bool `json:"accessibility"`
 	} `json:"perms"`
-	Autostart bool `json:"autostartSupported"`
+	Autostart bool        `json:"autostartSupported"`
+	Update    updateState `json:"update"`
 	Host      struct {
 		LocalURL  string       `json:"localUrl"`
 		ViewerURL string       `json:"viewerUrl"`
@@ -382,6 +419,7 @@ func buildState() uiState {
 		st.Perms.Screen, st.Perms.Accessibility = permScreen(), permAccessibility()
 	}
 	st.Autostart = autostartSupported()
+	st.Update = getUpdateState()
 	st.Host.LocalURL = "http://localhost:" + st.Config.hostPort()
 	st.Host.Tailnet = getTailnet()
 	if t := st.Host.Tailnet; t.Public && t.DNSName != "" {

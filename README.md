@@ -25,6 +25,7 @@
   <img alt="Go version" src="https://img.shields.io/github/go-mod/go-version/gadisaka/hopdesk?style=flat-square&color=00ADD8">
   <img alt="Platforms" src="https://img.shields.io/badge/agent-macOS%20%7C%20Windows-555?style=flat-square">
   <img alt="Viewer" src="https://img.shields.io/badge/viewer-any%20browser-555?style=flat-square">
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-green?style=flat-square"></a>
 </p>
 
 > [!CAUTION]
@@ -57,6 +58,7 @@ HopDesk is a remote desktop you run yourself, an open alternative to TeamViewer,
 | **Clipboard and files** | Copy and paste in both directions. Drop files on the screen to send them, or browse the remote computer and download. |
 | **Secure by design** | WebRTC encryption, a per-device identity key the viewer remembers (like SSH), and a password that's never sent anywhere. [Threat model →](SECURITY.md) |
 | **Friendly for everyone** | A built-in plain-language guide, a short first-run tour you can skip, Copy buttons everywhere, and light and dark themes. |
+| **Automatic updates** | Checks daily and installs in one click. Every release is signed, and only a genuine, newer version is installed. |
 | **Small and readable** | No accounts and no telemetry. Small enough to read in an afternoon. |
 
 ## Getting started
@@ -137,6 +139,7 @@ Pushing a tag (`git tag v1.0.0 && git push --tags`) makes GitHub Actions build b
 | [Building](docs/building.md) | Building from source, installers, code signing, ffmpeg |
 | [Video quality](docs/video-quality.md) | Quality presets, bitrates, and tips for the best picture |
 | [Testing](docs/testing.md) | Unit tests, browser end-to-end and attack tests, crypto cross-check |
+| [Automatic updates](docs/updates.md) | How updates are checked, verified and installed, and how to set up signing |
 | [Limitations](docs/limitations.md) | What HopDesk doesn't do (yet) |
 | [Security](SECURITY.md) | Threat model, design, and how to report a vulnerability |
 
@@ -147,6 +150,8 @@ Pushing a tag (`git tag v1.0.0 && git push --tags`) makes GitHub Actions build b
 - **[cmd/server](cmd/server)**: the standalone server command
 - **[internal/server](internal/server)**: the signaling server, with rate limits and origin checks, shared by the command and the app
 - **[internal/server/web](internal/server/web)**: the browser viewer, the guide, and the shared design system (`ui.css`, `theme.js`, `ui.js`)
+- **[internal/update](internal/update)**: signed release manifests and version comparison for automatic updates
+- **[cmd/releasetool](cmd/releasetool)**: makes the update signing key and signs each release
 - **[internal/auth](internal/auth)**: device identity signatures and password proofs (standard library only)
 - **[internal/proto](internal/proto)**: signaling messages shared by the server and agent
 - **[packaging](packaging)**, **[scripts](scripts)**, **[.github/workflows](.github/workflows)**: app icon, macOS bundle, Windows installer, build scripts and the release workflow
@@ -179,6 +184,10 @@ Bug reports, ideas and pull requests are welcome. Read [CONTRIBUTING.md](CONTRIB
 ## Acknowledgements
 
 HopDesk stands on [Pion WebRTC](https://github.com/pion/webrtc) and [Pion TURN](https://github.com/pion/turn), [Tailscale tsnet](https://tailscale.com/kb/1244/tsnet), [FFmpeg](https://ffmpeg.org), [kbinani/screenshot](https://github.com/kbinani/screenshot), [fyne.io/systray](https://github.com/fyne-io/systray) and [Gorilla WebSocket](https://github.com/gorilla/websocket), and takes inspiration from [RustDesk](https://github.com/rustdesk/rustdesk).
+
+## License
+
+HopDesk is released under the [MIT License](LICENSE). The Windows installer bundles an LGPL build of FFmpeg, whose license is installed next to it.
 
 ## Author
 

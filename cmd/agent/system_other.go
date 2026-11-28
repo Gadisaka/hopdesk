@@ -25,3 +25,6 @@ func setAutostart(on bool) error {
 	}
 	return nil
 }
+
+// appBundle is only meaningful on macOS.
+func appBundle() string { return "" }

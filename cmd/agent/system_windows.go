@@ -49,3 +49,6 @@ func setAutostart(on bool) error {
 	}
 	return k.SetStringValue("HopDesk", `"`+exe+`" -app`)
 }
+
+// appBundle is only meaningful on macOS.
+func appBundle() string { return "" }

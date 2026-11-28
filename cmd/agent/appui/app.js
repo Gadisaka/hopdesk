@@ -130,16 +130,107 @@ function renderTailnet(s) {
   }
 }
 
+// ---------- updates ----------
+
+const UPD_ICONS = {
+  ok: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+  new: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>',
+  spin: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5"/></svg>',
+  bad: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5M12 16.5h.01"/></svg>',
+  off: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M8 12h8"/></svg>',
+};
+let lastUpdState = '', seenVersion = '';
+
+function ago(iso) {
+  if (!iso || iso.startsWith('0001')) return '';
+  const m = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+  if (m < 1) return 'just now';
+  if (m < 60) return m + (m === 1 ? ' minute ago' : ' minutes ago');
+  const h = Math.round(m / 60);
+  if (h < 24) return h + (h === 1 ? ' hour ago' : ' hours ago');
+  const d = Math.round(h / 24);
+  return d + (d === 1 ? ' day ago' : ' days ago');
+}
+
+function renderUpdate(u) {
+  const icon = $('updIcon'), text = $('updText');
+  let title = '', sub = '', kind = 'ok', err = false;
+  const checked = ago(u.checked);
+  switch (u.state) {
+    case 'off':
+      title = 'Automatic updates are off'; sub = u.message || ''; kind = 'off'; break;
+    case 'checking':
+      title = 'Checking for updates…'; sub = 'You have ' + u.current; kind = 'spin'; break;
+    case 'available':
+      title = 'HopDesk ' + u.latest + ' is available';
+      sub = u.message || ('You have ' + u.current + '. Installing restarts HopDesk, and anyone connected is disconnected for a few seconds.');
+      err = !!u.message; kind = 'new'; break;
+    case 'downloading':
+      title = 'Downloading HopDesk ' + u.latest + '…'; sub = (u.progress || 0) + '%'; kind = 'spin'; break;
+    case 'installing':
+      title = 'Installing HopDesk ' + u.latest + '…'; sub = 'HopDesk will restart in a moment. This page reconnects by itself.'; kind = 'spin'; break;
+    case 'error':
+      title = "Couldn't check for updates"; sub = u.message || ''; kind = 'bad'; err = true; break;
+    case 'current':
+      title = "You're up to date"; sub = 'HopDesk ' + u.current + (checked ? ' · checked ' + checked : ''); break;
+    default:
+      title = 'HopDesk ' + u.current; sub = 'Not checked yet'; kind = 'off';
+  }
+  $('updTitle').textContent = title;
+  text.textContent = sub;
+  text.className = err ? 'err' : '';
+  icon.className = 'ic ' + (kind === 'ok' ? 'ok' : kind === 'new' ? 'new' : kind === 'bad' ? 'bad' : '');
+  icon.innerHTML = UPD_ICONS[kind] || UPD_ICONS.off;
+  const busy = ['checking', 'downloading', 'installing'].includes(u.state);
+  $('updCheck').hidden = u.state === 'off' || u.state === 'available' && !u.message || u.state === 'downloading' || u.state === 'installing';
+  $('updCheck').disabled = busy;
+  $('updInstall').hidden = u.state !== 'available';
+  $('updInstall').textContent = u.message ? 'Try again' : 'Install update';
+  $('updNotes').hidden = !(u.notesUrl && ['available', 'downloading', 'installing'].includes(u.state));
+  if (u.notesUrl) $('updNotes').href = u.notesUrl;
+  $('updBar').hidden = !(u.state === 'downloading' || u.state === 'installing');
+  $('updBarFill').style.width = (u.state === 'installing' ? 100 : u.progress || 0) + '%';
+  $('updAutoRow').hidden = u.state === 'off';
+  $('updAuto').checked = !!u.auto;
+  $('updPill').hidden = u.state !== 'available';
+  $('updPill').textContent = 'Update to ' + u.latest;
+  lastUpdState = u.state;
+}
+
+$('updCheck').onclick = async () => {
+  try { await api('update-check', {}); setTimeout(refresh, 300); } catch (e) { msg(e.message); }
+};
+$('updInstall').onclick = async () => {
+  const u = state && state.update;
+  if (!u) return;
+  const who = state.sessions ? ' The ' + state.sessions + ' viewer(s) connected now will be disconnected for a few seconds.' : '';
+  if (!confirm('Install HopDesk ' + u.latest + '? HopDesk will restart.' + who)) return;
+  try { await api('update-install', {}); setTimeout(refresh, 300); } catch (e) { msg(e.message); }
+};
+$('updAuto').onchange = async () => {
+  try { await api('update-auto', { on: $('updAuto').checked }); } catch (e) { msg(e.message); }
+};
+$('updPill').onclick = () => $('updCard').scrollIntoView({ behavior: 'smooth', block: 'center' });
+
 async function refresh() {
-  try { render(await api('state')); maybeTour(); }
-  catch (e) { $('pill').textContent = 'Not running'; $('pill').className = 'pill error'; }
+  try {
+    const s = await api('state');
+    if (seenVersion && s.version !== seenVersion) msg('Updated to HopDesk ' + s.version, true);
+    seenVersion = s.version;
+    render(s);
+    renderUpdate(s.update);
+    maybeTour();
+  } catch (e) {
+    if (lastUpdState === 'installing') { $('pill').textContent = 'Restarting…'; $('pill').className = 'pill starting'; return; }
+    $('pill').textContent = 'Not running'; $('pill').className = 'pill error';
+  }
 }
 
 async function newKey() {
   try { $('hostKey').value = (await api('new-key', {})).agentKey; dirty = true; } catch (e) { msg(e.message); }
 }
 
-document.querySelectorAll('input, select').forEach((el) => el.addEventListener('input', () => { dirty = true; }));
+document.querySelectorAll('input:not([data-nodirty]), select').forEach((el) => el.addEventListener('input', () => { dirty = true; }));
 $('modeConnect').onclick = () => { setMode('connect'); dirty = true; };
 $('modeHost').onclick = () => { setMode('host'); dirty = true; };
 $('showKey').onclick = () => { const k = $('hostKey'); k.type = k.type === 'password' ? 'text' : 'password'; };
@@ -222,6 +313,8 @@ const TOUR = [
     text: ['Picture quality, smoothness, copy and paste between computers, and whether someone here must approve each connection. The defaults are fine for most people.'] },
   { el: '#save', title: 'Save and restart',
     text: ['Changes on this page take effect when you click this. Anyone connected is briefly disconnected.'] },
+  { el: '#updCard', title: 'Updates',
+    text: ['HopDesk checks for a new version once a day and tells you when one is ready. Click Install update and it does the rest, then restarts by itself.'] },
   { el: '#helpLink', title: 'Need more help?',
     text: ['This guide explains every word on this page in plain language, including the difference between the agent, the viewer and the server.'] },
 ];

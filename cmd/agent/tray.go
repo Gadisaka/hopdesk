@@ -45,13 +45,15 @@ func runTray(ui *uiServer) {
 		mStatus.Disable()
 		mOpen := systray.AddMenuItem("Open HopDesk…", "Settings, password and permissions")
 		mCopy := systray.AddMenuItem("Copy device name", "Copy this computer's ID")
+		mUpdate := systray.AddMenuItem("Update available…", "Open HopDesk to install the new version")
+		mUpdate.Hide()
 		systray.AddSeparator()
 		mQuit := systray.AddMenuItem("Quit HopDesk", "Stop accepting connections")
 
 		go func() {
 			t := time.NewTicker(2 * time.Second)
 			defer t.Stop()
-			last := ""
+			last, lastUpd := "", ""
 			for {
 				text := trayStatus()
 				if text != last {
@@ -59,9 +61,19 @@ func runTray(ui *uiServer) {
 					systray.SetTooltip("HopDesk: " + text)
 					last = text
 				}
+				if u := getUpdateState(); u.State == "available" && u.Latest != lastUpd {
+					mUpdate.SetTitle("Install HopDesk " + u.Latest + "…")
+					mUpdate.Show()
+					lastUpd = u.Latest
+				} else if u.State != "available" && lastUpd != "" && u.State != "downloading" && u.State != "installing" {
+					mUpdate.Hide()
+					lastUpd = ""
+				}
 				select {
 				case <-t.C:
 				case <-mOpen.ClickedCh:
+					openURL(ui.url())
+				case <-mUpdate.ClickedCh:
 					openURL(ui.url())
 				case <-mCopy.ClickedCh:
 					appMu.Lock()

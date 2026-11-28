@@ -225,6 +225,7 @@ func runApp(restarted bool) {
 	if err != nil {
 		log.Fatalf("setup page: %v", err)
 	}
+	startUpdateLoop()
 	if exists && c.validate() == nil {
 		go startServices(c)
 	} else {

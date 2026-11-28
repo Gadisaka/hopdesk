@@ -26,6 +26,7 @@ Video, input, clipboard and files travel over WebRTC (DTLS-SRTP), directly betwe
 | Secrets leaking | Secrets come from environment variables, not command-line flags (with a warning if you use the flags), and TURN credentials are short-lived. |
 | Built-in Tailscale Funnel (public address) | Only the viewer page, signaling and the relay are published, all behind the protections above. The relay only accepts short-lived credentials and relays between sessions on this computer. Sign out of Tailscale on the settings page to take it offline. |
 | The app's settings page | Listens on this computer only, needs a random token for every request, and checks Host and Origin, so other websites and other users can't change settings. |
+| A fake or tampered update | Updates are only installed if `latest.json` carries a valid Ed25519 signature from the key built into HopDesk, the version is newer (no downgrades), and the installer matches the signed SHA-256. On macOS, the new app's bundle ID and code signature are checked too. [Details](docs/updates.md). |
 | Malicious file names | Uploads are stripped of folders, reserved Windows names are renamed, and existing files are never overwritten. |
 
 ## What's still up to you
