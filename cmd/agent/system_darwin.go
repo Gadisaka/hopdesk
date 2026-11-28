@@ -11,6 +11,8 @@ import (
 	"syscall"
 )
 
+func hideConsole(*exec.Cmd) {}
+
 func openURL(u string) { _ = exec.Command("open", u).Start() }
 
 // appBundle returns /Applications/HopDesk.app when running from a bundle.

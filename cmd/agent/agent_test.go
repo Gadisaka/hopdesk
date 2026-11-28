@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 )
@@ -133,5 +134,26 @@ func TestRandomPassword(t *testing.T) {
 	}
 	if p == randomPassword(16) {
 		t.Fatal("passwords repeat")
+	}
+}
+
+func TestHardwareEncodersGetLowLatencyOptions(t *testing.T) {
+	for _, c := range []struct{ codec, want string }{
+		{"h264_nvenc", "-zerolatency 1"},
+		{"h264_qsv", "-async_depth 1"},
+		{"h264_amf", "-usage ultralowlatency"},
+	} {
+		if got := strings.Join(encoderOpts(c.codec, false, "high"), " "); !strings.Contains(got, c.want) {
+			t.Errorf("%s: %q missing from %q", c.codec, c.want, got)
+		}
+	}
+	if got := strings.Join(encoderOpts("h264_mf", true, "high"), " "); !strings.Contains(got, "-hw_encoding 1") {
+		t.Errorf("h264_mf on the graphics chip: got %q", got)
+	}
+	if got := strings.Join(encoderOpts("h264_amf", false, "baseline"), " "); !strings.Contains(got, "constrained_baseline") {
+		t.Errorf("AMF baseline: got %q", got)
+	}
+	if encoderPixFmt("h264_qsv") != "nv12" || encoderPixFmt("libx264") != "yuv420p" {
+		t.Error("wrong pixel formats")
 	}
 }

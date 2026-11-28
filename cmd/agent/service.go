@@ -289,7 +289,7 @@ func changeService(on bool) error {
 // videoDescription is the "Video" line of the setup page.
 func videoDescription() string {
 	if *codecFlag != "jpeg" && h264Encoder() != "" {
-		return "H.264 (" + h264Encoder() + ")"
+		return "H.264 (" + encoderLabel(h264Encoder(), encHW) + ")"
 	}
 	return "JPEG frames (install ffmpeg for smoother video)"
 }

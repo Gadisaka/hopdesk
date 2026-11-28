@@ -53,7 +53,9 @@ func opusEncoder() string {
 		if path == "" {
 			return
 		}
-		out, err := exec.Command(path, "-hide_banner", "-encoders").Output()
+		cmd := exec.Command(path, "-hide_banner", "-encoders")
+		hideConsole(cmd)
+		out, err := cmd.Output()
 		if err != nil {
 			return
 		}
@@ -201,6 +203,7 @@ func (h *audioHub) runOnce(parent context.Context) error {
 	log.Printf("sound: capturing %d Hz, %d channels (%s)", format.Rate, format.Channels, format.Sample)
 
 	cmd := exec.CommandContext(ctx, findFFmpeg(), opusArgs(format, port)...)
+	hideConsole(cmd)
 	stderr := &tailBuffer{}
 	cmd.Stderr = stderr
 	stdin, err := cmd.StdinPipe()

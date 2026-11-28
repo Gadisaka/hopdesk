@@ -8,6 +8,8 @@ import (
 	"syscall"
 )
 
+func hideConsole(*exec.Cmd) {}
+
 func openURL(u string) { _ = exec.Command("xdg-open", u).Start() }
 
 func restartSelf() {

@@ -10,6 +10,12 @@ import (
 	"golang.org/x/sys/windows/registry"
 )
 
+// hideConsole keeps console programs (ffmpeg) from opening a window.
+func hideConsole(cmd *exec.Cmd) {
+	const createNoWindow = 0x08000000
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: createNoWindow}
+}
+
 func openURL(u string) {
 	cmd := exec.Command("rundll32", "url.dll,FileProtocolHandler", u)
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
