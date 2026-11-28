@@ -221,6 +221,12 @@ try:
         v.click("#soundBtn")
         agent.wait_for_function("window.__audioOn === false", timeout=5000)
         check("turning sound off stops it on the computer too", v.evaluate("audio.muted"))
+
+        # Ctrl+Alt+Del (offered by Windows computers with login-screen control on)
+        check("Ctrl+Alt+Del button is offered", v.locator("#sasBtn").is_visible())
+        v.click("#sasBtn")
+        agent.wait_for_function("window.__sasCount === 1", timeout=5000)
+        check("…and asks the computer to press it", True)
         v.click("#filesBtn")
         v.locator("#list .row", has_text="Downloads").click()
         expect(v.locator("#path")).to_have_attribute("title", "/Users/demo/Downloads", timeout=5000)

@@ -159,6 +159,12 @@
   .volume svg { width: 16px; height: 16px; flex: none; }
   .volume input { width: 84px; accent-color: var(--fg); }
   .volume[hidden] { display: none; }
+  #controls .volume .label-hide { display: none; } /* the icon says it; the phone sheet shows the word */
+  header:has(#controls:not([hidden])) .crumb { flex: none; } /* the device name always shows */
+  #controls { min-width: 0; }
+  #controls select { flex: none; }
+  #controls #display { flex: 0 1 auto; min-width: 110px; max-width: 190px; }
+  .volume input { width: 64px; }
   .opts { display: contents; }
 
   /* phones and tablets */
@@ -257,6 +263,7 @@
       <option value="5">5 fps</option><option value="10">10 fps</option><option value="15">15 fps</option>
       <option value="20">20 fps</option><option value="30">30 fps</option><option value="60">60 fps</option>
     </select>
+    <button id="sasBtn" class="sm" title="Press Ctrl+Alt+Del on the remote computer (to sign in, lock it or open Task Manager)" hidden>Ctrl+Alt+Del</button>
     <label class="volume" id="volumeRow" title="Volume" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 4V5L8 9z"/></svg><input id="volume" type="range" min="0" max="100" value="100" aria-label="Volume"><span class="label-hide">Volume</span></label>
     <label class="toggle" title="Send Ctrl when you press Cmd (for a Mac controlling a Windows PC)"><input id="swap" type="checkbox" class="switch"><span class="label-hide">Cmd → Ctrl</span></label>
     </div>

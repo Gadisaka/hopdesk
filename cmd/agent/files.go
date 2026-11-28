@@ -34,7 +34,7 @@ func receiveDir() string {
 	if *uploadDir != "" {
 		return *uploadDir
 	}
-	home, _ := os.UserHomeDir()
+	home := userHome()
 	return filepath.Join(home, "Downloads")
 }
 
@@ -261,7 +261,7 @@ func sendFile(s *session, dc *webrtc.DataChannel, p string) {
 // listDir answers the viewer's file browser.
 func listDir(s *session, p string, req int) {
 	if p == "" {
-		p, _ = os.UserHomeDir()
+		p = userHome()
 	}
 	p = filepath.Clean(p)
 	res := map[string]any{"t": "ls", "req": req, "path": p, "parent": filepath.Dir(p), "sep": string(filepath.Separator)}

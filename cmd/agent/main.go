@@ -195,10 +195,10 @@ func (s *session) sendHello() {
 	for _, b := range listDisplays() {
 		ds = append(ds, disp{b.Dx(), b.Dy()})
 	}
-	home, _ := os.UserHomeDir()
 	s.sendCtrl(map[string]any{
 		"t": "hello", "mode": s.getMode(), "displays": ds, "settings": set,
-		"home": home, "os": runtime.GOOS, "id": *agentID, "clipboard": *clipMode, "audio": s.audio != nil,
+		"home": userHome(), "os": runtime.GOOS, "id": *agentID, "clipboard": *clipMode, "audio": s.audio != nil,
+		"sas": sasAvailable(),
 	})
 }
 
@@ -306,6 +306,11 @@ func (s *session) handleCtrl(m ctrlMsg) {
 		go listDir(s, m.Path, m.Req)
 	case "audio":
 		sound.listen(s, m.On)
+	case "sas":
+		if sasAvailable() {
+			log.Printf("session %s: Ctrl+Alt+Del", s.short())
+			requestSAS()
+		}
 	}
 }
 
@@ -767,6 +772,9 @@ func identityFingerprint() string {
 }
 
 func main() {
+	if runSpecialMode(os.Args[1:]) {
+		return
+	}
 	// Double-clicked (no arguments; old macOS adds -psn_…) or -app: desktop app.
 	if len(os.Args) == 1 || os.Args[1] == "-app" || strings.HasPrefix(os.Args[1], "-psn") {
 		runApp(len(os.Args) > 2 && os.Args[2] == "-restarted")

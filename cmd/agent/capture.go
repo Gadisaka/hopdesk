@@ -61,7 +61,7 @@ func displayBounds(d int) image.Rectangle {
 // captureFrame grabs a display and returns a tightly packed RGBA image at
 // most maxW wide, with even dimensions (required by the H.264 encoder).
 func captureFrame(d, maxW int) (*image.RGBA, error) {
-	img, err := screenshot.CaptureRect(displayBounds(d))
+	img, err := captureRect(displayBounds(d))
 	if err != nil {
 		return nil, err
 	}

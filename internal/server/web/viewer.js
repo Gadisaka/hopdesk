@@ -192,6 +192,7 @@ function disconnect(keepStatus) {
   frames.clear(); lastDrawn = -1;
   video.srcObject = null; video.hidden = true; canvas.hidden = true;
   audio.srcObject = null; audio.muted = true; soundOn = false; showSound(false);
+  $('sasBtn').hidden = true;
   $('hint').hidden = false;
   $('login').hidden = false; $('controls').hidden = true; $('files').hidden = true;
   if (window.HopTouch) HopTouch.onDisconnected();
@@ -241,6 +242,7 @@ function onHello(m) {
   remoteOS = m.os || '';
   if (window.HopTouch) HopTouch.onConnected();
   showSound(!!m.audio);
+  $('sasBtn').hidden = !m.sas;
   if (!helloSeen) {
     helloSeen = true;
     if (m.audio && prefGet('hopdesk-sound') === '1') setSound(true, true);
@@ -248,6 +250,10 @@ function onHello(m) {
   }
   $('controls').title = mode === 'h264' ? 'H.264 video' : 'JPEG frames (install ffmpeg on the remote for smoother video)';
 }
+// Ctrl+Alt+Del can't be sent as normal keys: Windows reserves it, so the
+// HopDesk service presses it on the remote computer.
+$('sasBtn').addEventListener('click', () => { send({ t: 'sas' }); toast('Sent Ctrl+Alt+Del'); surface.focus(); });
+
 // ---------- sound ----------
 // Sound starts off: browsers only play audio after a tap, and the computer only
 // captures sound while someone is listening.

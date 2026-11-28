@@ -27,11 +27,7 @@ func statePath() string {
 	if *stateFile != "" {
 		return *stateFile
 	}
-	dir, err := os.UserConfigDir()
-	if err != nil {
-		dir = "."
-	}
-	return filepath.Join(dir, "hopdesk", "agent.json")
+	return filepath.Join(appDir(), "agent.json")
 }
 
 func loadState() (*agentState, error) {

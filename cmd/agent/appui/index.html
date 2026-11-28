@@ -280,6 +280,17 @@
     </div>
   </section>
 
+  <!-- login-screen control (Windows) -->
+  <section class="section card" id="svcCard" hidden>
+    <div class="body">
+      <h2>Login screen and admin prompts</h2>
+      <p class="sub">Windows hides its login screen and admin prompts (“Do you want to allow this app to make changes?”) from normal apps. Turn this on to see and control them too, so you can sign in after a restart and approve installs. It adds a small HopDesk service, and Windows asks for administrator permission once.</p>
+      <label class="pref"><div class="t"><b>Control the login screen and admin prompts</b><small id="svcText">Off</small></div><input type="checkbox" class="switch" id="svcOn" data-nodirty></label>
+      <div class="alert bad" id="svcErr" hidden></div>
+      <div class="foot" id="svcStaleRow" hidden><span class="grow">The service still runs an older copy of HopDesk. Update it so both match (Windows asks for permission).</span><button id="svcUpdate">Update service</button></div>
+    </div>
+  </section>
+
   <!-- updates -->
   <section class="section card" id="updCard">
     <div class="body">

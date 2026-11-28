@@ -28,6 +28,7 @@ Video, input, clipboard and files travel over WebRTC (DTLS-SRTP), directly betwe
 | The app's settings page | Listens on this computer only, needs a random token for every request, and checks Host and Origin, so other websites and other users can't change settings. |
 | A fake or tampered update | Updates are only installed if `latest.json` carries a valid Ed25519 signature from the key built into HopDesk, the version is newer (no downgrades), and the installer matches the signed SHA-256. On macOS, the new app's bundle ID and code signature are checked too. [Details](docs/updates.md). |
 | Probing which devices exist | `/online` answers only for the device names it's asked about, at most 10 at a time and 6 times a minute per address, and only to this server's own page. It reveals no more than a connection attempt ("that device is not online") already does. |
+| Windows login-screen control | Off by default. Turning it on needs administrator permission. The service runs its own copy of HopDesk from Program Files, where only administrators can change it, never the per-user install. Settings and the identity move to a folder only the system account, administrators and the user who turned it on can open. Ctrl+Alt+Del goes through an event only the system account can signal. |
 | Malicious file names | Uploads are stripped of folders, reserved Windows names are renamed, and existing files are never overwritten. |
 
 ## What's still up to you
@@ -35,6 +36,7 @@ Video, input, clipboard and files travel over WebRTC (DTLS-SRTP), directly betwe
 - **The first connection:** compare the fingerprint the viewer shows with the one in the HopDesk app. That one check is what makes impostors detectable later.
 - **The server serves the viewer page,** so run your own server and reach it over HTTPS.
 - **Anyone with the password has full control,** including your files. Use the generated password or a long one, and turn on **Approve each connection** for shared computers.
+- **Windows login-screen control** runs HopDesk as the system account, so with it on, the password also opens the login screen and admin prompts, and files you upload or download are handled with system rights. Only turn it on for computers you'd trust with an administrator password.
 - **The 30-per-hour cap** means a determined attacker spread across many addresses can pause new logins for a while, but can't get in. If that happens, the agent log shows it.
 
 > [!IMPORTANT]

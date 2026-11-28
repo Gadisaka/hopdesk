@@ -76,6 +76,13 @@ Function .onInstSuccess
 FunctionEnd
 
 Section "Uninstall"
+  ; If login-screen control was turned on, remove the HopDesk service first.
+  ; It asks Windows for administrator permission, and copies the settings
+  ; back to %APPDATA%\hopdesk so they're kept like the rest.
+  ReadRegStr $0 HKLM "SYSTEM\CurrentControlSet\Services\HopDesk" "ImagePath"
+  ${If} $0 != ""
+    ExecWait '"$INSTDIR\HopDesk.exe" -service-uninstall -to "$APPDATA\hopdesk"'
+  ${EndIf}
   nsExec::Exec 'taskkill /IM HopDesk.exe /F'
   Sleep 500
   DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "HopDesk"

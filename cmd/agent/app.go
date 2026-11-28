@@ -44,10 +44,24 @@ var (
 	appCfgExists bool
 )
 
+// appDir holds the settings and this computer's identity. Normally that's
+// the user's own config folder; with login-screen control on (Windows), it's
+// a folder the HopDesk service can read too (see service.go).
 func appDir() string {
 	if *stateFile != "" {
 		return filepath.Dir(*stateFile)
 	}
+	if role == roleWorker || serviceMode {
+		if d := serviceDataDir(); d != "" {
+			return d
+		}
+	}
+	return userDir()
+}
+
+// userDir is the user's own HopDesk folder: per-user things (the setup
+// page's lock file, update preferences, Tailscale) always stay here.
+func userDir() string {
 	dir, err := os.UserConfigDir()
 	if err != nil {
 		dir = "."
@@ -56,7 +70,13 @@ func appDir() string {
 }
 
 func appConfigPath() string { return filepath.Join(appDir(), "app.json") }
-func logPath() string       { return filepath.Join(appDir(), "hopdesk.log") }
+
+func logPath() string {
+	if role == roleWorker {
+		return filepath.Join(appDir(), "worker.log")
+	}
+	return filepath.Join(userDir(), "hopdesk.log")
+}
 
 func defaultAppConfig() appConfig {
 	h, _ := os.Hostname()
@@ -142,6 +162,9 @@ func (c appConfig) validate() error {
 	if !allowedFPS[c.FPS] {
 		return errors.New("invalid frame rate")
 	}
+	if serviceMode && c.Mode == "host" {
+		return errors.New("this computer can't be the server while login-screen control is on: turn that off first (under Preferences)")
+	}
 	return nil
 }
 
@@ -180,6 +203,9 @@ func getStatus() (string, string) {
 }
 
 func activeSessions() int {
+	if serviceMode {
+		return lastWorkerStatus().Sessions
+	}
 	capMu.Lock()
 	defer capMu.Unlock()
 	return sessionN - pendingN
@@ -188,7 +214,7 @@ func activeSessions() int {
 // ---- app startup ----
 
 func setupAppLogging() {
-	_ = os.MkdirAll(appDir(), 0o700)
+	_ = os.MkdirAll(filepath.Dir(logPath()), 0o700)
 	if fi, err := os.Stat(logPath()); err == nil && fi.Size() > 5<<20 {
 		_ = os.Rename(logPath(), logPath()+".old")
 	}
@@ -209,6 +235,7 @@ func stderrOrDiscard() io.Writer {
 }
 
 func runApp(restarted bool) {
+	serviceMode = detectServiceMode()
 	setupAppLogging()
 	c, exists, err := loadAppConfig()
 	if err != nil {
@@ -227,7 +254,11 @@ func runApp(restarted bool) {
 		log.Fatalf("setup page: %v", err)
 	}
 	startUpdateLoop()
-	if exists && c.validate() == nil {
+	if serviceMode {
+		// The HopDesk service shares the screen; this app shows its status.
+		log.Printf("login-screen control is on: the HopDesk service runs the connection")
+		go followWorker()
+	} else if exists && c.validate() == nil {
 		go startServices(c)
 	} else {
 		setStatus("setup", "Almost done: choose how this computer connects under Connection, then click Save and restart.")

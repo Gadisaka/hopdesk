@@ -117,6 +117,10 @@ func itoa(i int) string {
 
 var mu sync.Mutex
 
+// The exported input functions run on the thread that follows the desktop
+// that's showing (see desktop_windows.go), so clicks and typing also reach
+// the login screen and admin prompts when HopDesk runs as a service.
+
 func platformInit() error { return nil }
 
 func sendMouse(flags, data uint32) {
@@ -133,13 +137,13 @@ func setCursor(x, y float64) {
 	procSetCursorPos.Call(uintptr(int32(x)), uintptr(int32(y)))
 }
 
-func inputMove(x, y float64) {
+func inputMoveNow(x, y float64) {
 	mu.Lock()
 	defer mu.Unlock()
 	setCursor(x, y)
 }
 
-func inputButton(x, y float64, b int, down bool, _ int) {
+func inputButtonNow(x, y float64, b int, down bool, _ int) {
 	mu.Lock()
 	defer mu.Unlock()
 	setCursor(x, y)
@@ -164,7 +168,7 @@ func inputButton(x, y float64, b int, down bool, _ int) {
 	sendMouse(f, 0)
 }
 
-func inputScroll(dx, dy float64) {
+func inputScrollNow(dx, dy float64) {
 	mu.Lock()
 	defer mu.Unlock()
 	// Browser: positive deltaY = down. Windows: positive wheel = up.
@@ -176,7 +180,7 @@ func inputScroll(dx, dy float64) {
 	}
 }
 
-func inputKey(code, key string, down bool) {
+func inputKeyNow(code, key string, down bool) {
 	mu.Lock()
 	defer mu.Unlock()
 	if vk, ok := winKeys[code]; ok {
@@ -198,3 +202,13 @@ func inputKey(code, key string, down bool) {
 		}
 	}
 }
+
+func inputMove(x, y float64) { onInputDesktop(func() { inputMoveNow(x, y) }) }
+
+func inputButton(x, y float64, b int, down bool, clicks int) {
+	onInputDesktop(func() { inputButtonNow(x, y, b, down, clicks) })
+}
+
+func inputScroll(dx, dy float64) { onInputDesktop(func() { inputScrollNow(dx, dy) }) }
+
+func inputKey(code, key string, down bool) { onInputDesktop(func() { inputKeyNow(code, key, down) }) }

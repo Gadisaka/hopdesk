@@ -46,7 +46,7 @@ type uiLock struct {
 	Token string `json:"token"`
 }
 
-func uiLockPath() string { return filepath.Join(appDir(), "ui.json") }
+func uiLockPath() string { return filepath.Join(userDir(), "ui.json") }
 
 func (u *uiServer) url() string { return fmt.Sprintf("http://127.0.0.1:%d/#%s", u.port, u.token) }
 
@@ -182,7 +182,7 @@ func startUI(restarted bool) (*uiServer, error) {
 	}
 	u := &uiServer{port: ln.Addr().(*net.TCPAddr).Port, token: lk.Token}
 	lk.Port = u.port
-	_ = os.MkdirAll(appDir(), 0o700)
+	_ = os.MkdirAll(userDir(), 0o700)
 	data, _ := json.Marshal(lk)
 	if err := os.WriteFile(uiLockPath(), data, 0o600); err != nil {
 		log.Printf("setup page lock file: %v", err)
@@ -345,8 +345,37 @@ func (u *uiServer) api(w http.ResponseWriter, r *http.Request) {
 	case "/api/new-key":
 		writeJSON(w, 200, map[string]string{"agentKey": newAgentKey()})
 
+	case "/api/service":
+		var b struct {
+			On bool `json:"on"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
+			writeJSON(w, 400, map[string]string{"error": "bad request"})
+			return
+		}
+		if !serviceSupported() {
+			writeJSON(w, 400, map[string]string{"error": "login-screen control is only available on Windows"})
+			return
+		}
+		appMu.Lock()
+		c, exists := appCfg, appCfgExists
+		appMu.Unlock()
+		if b.On && (!exists || c.Mode != "connect" || c.validate() != nil) {
+			writeJSON(w, 400, map[string]string{"error": "First connect this computer to a HopDesk server (under Connection) and save. Login-screen control doesn't work when this computer is the server."})
+			return
+		}
+		if err := changeService(b.On); err != nil {
+			writeJSON(w, 409, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, 200, map[string]bool{"ok": true})
+
 	case "/api/open-log":
-		openURL(logPath())
+		if serviceMode {
+			openURL(filepath.Join(appDir(), "worker.log")) // connections are logged by the service's worker
+		} else {
+			openURL(logPath())
+		}
 		writeJSON(w, 200, map[string]bool{"ok": true})
 
 	case "/api/restart":
@@ -423,6 +452,7 @@ type uiState struct {
 		Accessibility bool `json:"accessibility"`
 	} `json:"perms"`
 	Autostart bool        `json:"autostartSupported"`
+	Service   serviceInfo `json:"service"`
 	Update    updateState `json:"update"`
 	Host      struct {
 		LocalURL  string       `json:"localUrl"`
@@ -443,11 +473,12 @@ func buildState() uiState {
 	appMu.Lock()
 	st.Config, st.SetupDone = appCfg, appCfgExists
 	appMu.Unlock()
-	st.Video = "JPEG frames (install ffmpeg for smoother video)"
-	if *codecFlag != "jpeg" && h264Encoder() != "" {
-		st.Video = "H.264 (" + h264Encoder() + ")"
+	st.Video, st.Sound = videoDescription(), audioDescription()
+	st.Service = getServiceInfo()
+	if serviceMode { // the service's worker shares the screen, so show what it uses
+		ws := lastWorkerStatus()
+		st.Video, st.Sound = ws.Video, ws.Sound
 	}
-	st.Sound = audioDescription()
 	st.Perms.Supported = permSupported()
 	if st.Perms.Supported {
 		st.Perms.Screen, st.Perms.Accessibility = permScreen(), permAccessibility()

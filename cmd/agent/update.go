@@ -58,7 +58,7 @@ var upd struct {
 	prefs updatePrefs
 }
 
-func updatePrefsPath() string { return filepath.Join(appDir(), "update.json") }
+func updatePrefsPath() string { return filepath.Join(userDir(), "update.json") }
 
 func loadUpdatePrefs() {
 	var p updatePrefs
@@ -73,7 +73,7 @@ func loadUpdatePrefs() {
 // saveUpdatePrefs must be called with upd locked.
 func saveUpdatePrefs() {
 	data, _ := json.Marshal(upd.prefs)
-	_ = os.MkdirAll(appDir(), 0o700)
+	_ = os.MkdirAll(userDir(), 0o700)
 	if err := os.WriteFile(updatePrefsPath(), data, 0o600); err != nil {
 		log.Printf("update: saving preferences: %v", err)
 	}

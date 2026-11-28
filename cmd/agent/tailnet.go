@@ -86,7 +86,7 @@ func tailnetHostname(id string) string {
 func startTailnet(srv *server.Server) {
 	updateTailnet(func(s *tailnetState) { *s = tailnetState{State: "starting"} })
 	ts := &tsnet.Server{
-		Dir:      filepath.Join(appDir(), "tailscale"),
+		Dir:      filepath.Join(userDir(), "tailscale"),
 		Hostname: tailnetHostname(*agentID),
 		Logf:     func(string, ...any) {}, // very chatty; keep the HopDesk log readable
 		UserLogf: func(format string, args ...any) { log.Printf("tailscale: "+format, args...) },

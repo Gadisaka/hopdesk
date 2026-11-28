@@ -53,6 +53,7 @@ function render(s) {
   }
 
   renderTailnet(s);
+  renderService(s);
 
   // Fill the form once, then leave the user's edits alone.
   if (firstLoad || !dirty) {
@@ -214,6 +215,54 @@ $('updAuto').onchange = async () => {
 };
 $('updPill').onclick = () => $('updCard').scrollIntoView({ behavior: 'smooth', block: 'center' });
 
+// ---------- login-screen control (Windows) ----------
+
+let svcRestarting = false;
+function renderService(s) {
+  const v = s.service || {};
+  $('svcCard').hidden = !v.supported;
+  if (!v.supported) return;
+  if (!v.busy && !svcRestarting) $('svcOn').checked = v.on;
+  $('svcOn').disabled = v.busy || svcRestarting;
+  $('svcUpdate').disabled = v.busy || svcRestarting;
+  let text = 'Off. HopDesk works while someone is logged in to Windows.';
+  if (v.busy) text = 'Waiting for Windows… Click Yes in the administrator prompt.';
+  else if (svcRestarting) text = 'Done. HopDesk is restarting…';
+  else if (v.on && v.running) text = 'On. You can reach the login screen, the lock screen and admin prompts, and press Ctrl+Alt+Del from the viewer.';
+  else if (v.on) text = 'On, but the HopDesk service isn’t running. Turn this off and on again, or restart the computer.';
+  $('svcText').textContent = text;
+  $('svcErr').hidden = !v.error; $('svcErr').textContent = v.error || '';
+  $('svcStaleRow').hidden = !(v.on && v.stale) || v.busy;
+}
+
+async function setService(on) {
+  try {
+    await api('service', { on });
+    $('svcText').textContent = 'Waiting for Windows… Click Yes in the administrator prompt.';
+    $('svcOn').disabled = true;
+    const poll = setInterval(async () => {
+      try {
+        const s = await api('state');
+        if (!s.service.busy) {
+          clearInterval(poll);
+          if (s.service.error) { render(s); return; }
+          svcRestarting = true; render(s);
+          setTimeout(() => { svcRestarting = false; firstLoad = true; refresh(); }, 4000);
+        }
+      } catch (e) { /* restarting */ }
+    }, 1000);
+  } catch (e) { msg(e.message); $('svcOn').checked = !on; }
+}
+$('svcOn').onchange = () => {
+  const on = $('svcOn').checked;
+  const q = on
+    ? 'Turn on control of the login screen and admin prompts?\n\nWindows will ask for administrator permission. With this on, anyone who has this computer’s HopDesk password can also sign in to Windows here and approve admin prompts, so keep the password private.'
+    : 'Turn off control of the login screen and admin prompts? Windows will ask for administrator permission to remove the HopDesk service.';
+  if (!confirm(q)) { $('svcOn').checked = !on; return; }
+  setService(on);
+};
+$('svcUpdate').onclick = () => setService(true);
+
 async function refresh() {
   try {
     const s = await api('state');
@@ -223,7 +272,7 @@ async function refresh() {
     renderUpdate(s.update);
     maybeTour();
   } catch (e) {
-    if (lastUpdState === 'installing') { $('pill').textContent = 'Restarting…'; $('pill').className = 'pill starting'; return; }
+    if (lastUpdState === 'installing' || svcRestarting) { $('pill').textContent = 'Restarting…'; $('pill').className = 'pill starting'; return; }
     $('pill').textContent = 'Not running'; $('pill').className = 'pill error';
   }
 }
