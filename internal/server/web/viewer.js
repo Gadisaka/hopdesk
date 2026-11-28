@@ -6,7 +6,7 @@ const ctx2d = canvas.getContext('2d');
 let pc = null, framesDc = null, ctrl = null, mode = 'jpeg', connected = false;
 let frames = new Map(), lastDrawn = -1;
 const pressed = new Set();
-let remoteHome = '', cwd = '', parentDir = '', sep = '/', lsReq = 0;
+let remoteHome = '', cwd = '', parentDir = '', sep = '/', lsReq = 0, remoteOS = '';
 
 const ERR_RE = /error|wrong|fail|refused|stopped|declined|too many|could not|changed|not online|needs https/i;
 function setStatus(t) {
@@ -187,6 +187,7 @@ function disconnect(keepStatus) {
   video.srcObject = null; video.hidden = true; canvas.hidden = true;
   $('hint').hidden = false;
   $('login').hidden = false; $('controls').hidden = true; $('files').hidden = true;
+  if (window.HopTouch) HopTouch.onDisconnected();
   if (!keepStatus) setStatus('Not connected');
 }
 
@@ -206,7 +207,7 @@ function onCtrl(m) {
       setStatus('Connected to ' + $('id').value.trim());
       $('login').hidden = true; $('controls').hidden = false; $('hint').hidden = true;
       surface.focus();
-      setTimeout(() => { if (connected) startSessionTour(false); }, 1200);
+      setTimeout(() => { if (connected && !(window.HopTouch && HopTouch.isTouch)) startSessionTour(false); }, 1200);
       break;
     case 'hello': onHello(m); break;
     case 'clip': onRemoteClip(m.text); break;
@@ -228,6 +229,8 @@ function onHello(m) {
   $('quality').value = m.settings.quality;
   $('fps').value = m.settings.fps;
   remoteHome = m.home;
+  remoteOS = m.os || '';
+  if (window.HopTouch) HopTouch.onConnected();
   if (!helloSeen) {
     helloSeen = true;
     if (m.os === 'windows' && /Mac/.test(navigator.platform)) $('swap').checked = true;
@@ -262,8 +265,18 @@ function onChunk(buf) {
 // ---------- mouse ----------
 // The picture is scaled to fit (object-fit: contain), so find where it
 // actually sits inside the element before turning the pointer into 0..1.
+// On a phone the page can be turned sideways in CSS (see touch.js). Then
+// screen coordinates are turned back into page coordinates first.
+let rotated = false;
+function toPage(x, y) { return rotated ? { x: y, y: window.innerWidth - x } : { x, y }; }
+function pageRect(el) {
+  const r = el.getBoundingClientRect();
+  if (!rotated) return { left: r.left, top: r.top, width: r.width, height: r.height, right: r.right, bottom: r.bottom };
+  const left = r.top, top = window.innerWidth - r.right;
+  return { left, top, width: r.height, height: r.width, right: left + r.height, bottom: top + r.width };
+}
 function norm(e) {
-  const el = active(), r = el.getBoundingClientRect();
+  const el = active(), r = pageRect(el), p = toPage(e.clientX, e.clientY);
   const iw = el === video ? video.videoWidth : canvas.width;
   const ih = el === video ? video.videoHeight : canvas.height;
   let left = r.left, top = r.top, w = r.width, h = r.height;
@@ -272,7 +285,7 @@ function norm(e) {
     w = iw * s; h = ih * s;
     left += (r.width - w) / 2; top += (r.height - h) / 2;
   }
-  return { x: Math.min(1, Math.max(0, (e.clientX - left) / w)), y: Math.min(1, Math.max(0, (e.clientY - top) / h)) };
+  return { x: Math.min(1, Math.max(0, (p.x - left) / w)), y: Math.min(1, Math.max(0, (p.y - top) / h)) };
 }
 let pendingMove = null, wheelX = 0, wheelY = 0, rafQueued = false;
 function flush() {
@@ -503,3 +516,16 @@ if (window.isSecureContext && !$('login').hidden) {
     if (!connected) HopUI.tour.start({ id: 'viewer-connect-v1', steps: CONNECT_TOUR, onEnd: () => $('id').focus() });
   }, 500);
 }
+
+// ---------- narrow screens: picture settings live behind one button ----------
+$('moreBtn').addEventListener('click', (e) => {
+  e.stopPropagation();
+  const open = $('controls').classList.toggle('open');
+  $('moreBtn').setAttribute('aria-expanded', String(open));
+});
+document.addEventListener('click', (e) => {
+  if ($('controls').classList.contains('open') && !e.target.closest('#opts') && !e.target.closest('#moreBtn')) {
+    $('controls').classList.remove('open');
+    $('moreBtn').setAttribute('aria-expanded', 'false');
+  }
+});

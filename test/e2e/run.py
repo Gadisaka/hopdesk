@@ -215,6 +215,126 @@ try:
         v.click("#disconnect")
         expect(v.locator("#status")).to_have_text("Not connected", timeout=5000)
 
+        # ---- a phone: touch gestures and the on-screen keyboard ----
+        time.sleep(6.5)  # connection budget
+        pctx = browser.new_context(viewport={"width": 390, "height": 844}, device_scale_factor=3, is_mobile=True,
+                                   has_touch=True, bypass_csp=True, color_scheme=os.environ.get("THEME", "dark"))
+        pctx.add_init_script("try { localStorage.setItem('hopdesk-tour-viewer-connect-v1', 'done') } catch (e) {}")
+        ph = pctx.new_page()
+        ph.goto("http://127.0.0.1:8080/")
+        ph.fill("#id", "studio-mac"); ph.fill("#pw", PW); ph.tap("#connect")
+        expect(ph.locator("#modal")).to_be_visible(timeout=15000)
+        ph.tap("#mOk")
+        expect(ph.locator("#touchbar")).to_be_visible(timeout=15000)
+        check("phone: touch controls appear", ph.locator("#tcursor").is_visible())
+        expect(ph.locator(".tour-pop")).to_be_visible(timeout=6000)
+        check("phone: first session explains the gestures", ph.locator("#tourTitle").inner_text() == "Control it with your fingers")
+        ph.screenshot(path=f"{OUT}/phone-tour.png")
+        ph.tap(".tour-skip")
+        ph.wait_for_function("video.videoWidth > 0", timeout=15000)
+        ph.evaluate("""() => {
+          window.__touch = async (steps) => {
+            const s = document.getElementById('surface');
+            const mk = (pts) => pts.map((p, i) => new Touch({ identifier: i, target: s, clientX: p[0], clientY: p[1] }));
+            for (const st of steps) {
+              const now = st.type === 'end' ? [] : mk(st.pts);
+              s.dispatchEvent(new TouchEvent('touch' + st.type, { touches: now, targetTouches: now, changedTouches: mk(st.pts), bubbles: true, cancelable: true }));
+              await new Promise((r) => setTimeout(r, st.wait || 20));
+            }
+          };
+        }""")
+        def gesture(steps):
+            agent.evaluate("window.__log.length = 0")
+            ph.evaluate("(s) => window.__touch(s)", steps)
+            time.sleep(0.4)
+            return agent.evaluate("window.__log")
+        sr = ph.evaluate("(() => { const r = document.getElementById('surface').getBoundingClientRect(); return {x: r.x, y: r.y, w: r.width, h: r.height}; })()")
+        cx, cy = sr["x"] + sr["w"] / 2, sr["y"] + sr["h"] / 2
+        log = gesture([{"type": "start", "pts": [[cx, cy]]}] + [{"type": "move", "pts": [[cx + i * 10, cy]]} for i in range(1, 9)] + [{"type": "end", "pts": [[cx + 80, cy]]}])
+        moves = [e for e in log if e["t"] == "move"]
+        check("phone: dragging moves the pointer like a touchpad", moves and moves[-1]["x"] > 0.55 and not any(e["t"] == "down" for e in log),
+              f"x={moves[-1]['x']:.2f}" if moves else "no moves")
+        log = gesture([{"type": "start", "pts": [[cx, cy]], "wait": 40}, {"type": "end", "pts": [[cx, cy]]}])
+        downs = [e for e in log if e["t"] == "down"]
+        check("phone: a tap clicks where the pointer is", downs and downs[0]["b"] == 0 and downs[0]["x"] > 0.55)
+        time.sleep(0.4)
+        log = gesture([{"type": "start", "pts": [[cx - 30, cy], [cx + 30, cy]], "wait": 40}, {"type": "end", "pts": [[cx - 30, cy], [cx + 30, cy]]}])
+        check("phone: a two-finger tap right-clicks", any(e["t"] == "down" and e["b"] == 2 for e in log))
+        log = gesture([{"type": "start", "pts": [[cx - 30, cy], [cx + 30, cy]]}] + [{"type": "move", "pts": [[cx - 30, cy - i * 12], [cx + 30, cy - i * 12]]} for i in range(1, 8)] + [{"type": "end", "pts": [[cx - 30, cy - 84], [cx + 30, cy - 84]]}])
+        wheels = [e for e in log if e["t"] == "wheel"]
+        check("phone: a two-finger drag scrolls", wheels and sum(e["dy"] for e in wheels) > 0)
+        gesture([{"type": "start", "pts": [[cx - 30, cy], [cx + 30, cy]]}] + [{"type": "move", "pts": [[cx - 30 - i * 15, cy], [cx + 30 + i * 15, cy]]} for i in range(1, 8)] + [{"type": "end", "pts": [[cx - 135, cy], [cx + 135, cy]]}])
+        zoomed = ph.evaluate("video.style.transform")
+        check("phone: pinching zooms in", "scale(" in zoomed and ph.locator("#tZoom").is_visible(), zoomed)
+        ph.screenshot(path=f"{OUT}/phone-zoomed.png")
+        ph.tap("#tZoom")
+        check("phone: Fit zooms back out", ph.evaluate("video.style.transform") == "")
+
+        ph.tap("#tKbd")
+        expect(ph.locator("#kbar")).to_be_visible(timeout=3000)
+        agent.evaluate("window.__log.length = 0")
+        ph.keyboard.type("hi there"); time.sleep(0.4)
+        typed = "".join(e["key"] for e in agent.evaluate("window.__log") if e["t"] == "key" and e["down"])
+        check("phone: the keyboard types on the remote computer", typed == "hi there", typed)
+        agent.evaluate("window.__log.length = 0")
+        ph.tap("#kbar [data-mod=ctrl]"); ph.keyboard.type("c"); time.sleep(0.4)
+        keys = [(e["code"], e["down"]) for e in agent.evaluate("window.__log") if e["t"] == "key"]
+        check("phone: Ctrl then C sends Ctrl+C", keys == [("ControlLeft", True), ("KeyC", True), ("KeyC", False), ("ControlLeft", False)], keys)
+        agent.evaluate("window.__log.length = 0")
+        ph.tap("#kbar [data-code=Escape]"); time.sleep(0.3)
+        check("phone: extra keys work (Esc)", any(e["t"] == "key" and e["code"] == "Escape" for e in agent.evaluate("window.__log")))
+        ph.screenshot(path=f"{OUT}/phone-keyboard.png")
+        ph.tap("#kDone")
+
+        ph.tap("#tMode")
+        check("phone: switches to direct mode", ph.locator("#tMode").get_attribute("data-mode") == "direct" and not ph.locator("#tcursor").is_visible())
+        time.sleep(0.4)
+        tx, ty = sr["x"] + sr["w"] * 0.25, cy
+        log = gesture([{"type": "start", "pts": [[tx, ty]], "wait": 40}, {"type": "end", "pts": [[tx, ty]]}])
+        downs = [e for e in log if e["t"] == "down"]
+        expect_x = ph.evaluate(f"norm({{clientX: {tx}, clientY: {ty}}}).x")
+        check("phone: direct mode clicks exactly where you tap", downs and abs(downs[0]["x"] - expect_x) < 0.01, f"{downs[0]['x']:.3f} vs {expect_x:.3f}" if downs else "")
+        ph.tap("#tMode")  # back to touchpad for the next visit
+
+        pic_w = "(() => { const r = pageRect(video); return Math.min(r.width / video.videoWidth, r.height / video.videoHeight) * video.videoWidth; })()"
+        before_w = ph.evaluate(pic_w)
+        ph.tap("#tRotate"); time.sleep(0.8)
+        css_rot = ph.evaluate("document.body.classList.contains('rotated')")
+        check("phone: Rotate turns the picture sideways", css_rot or ph.evaluate("!!document.fullscreenElement"))
+        if css_rot:
+            after_w = ph.evaluate(pic_w)
+            check("phone: …and makes it bigger", after_w > before_w * 1.5, f"{before_w:.0f}px → {after_w:.0f}px wide")
+            # Tap a known spot of the turned picture, worked out from the screen geometry alone.
+            g = ph.evaluate("(() => { const r = document.getElementById('surface').getBoundingClientRect(); return {right: r.right, top: r.top, w: r.width, h: r.height, vw: video.videoWidth, vh: video.videoHeight}; })()")
+            W, H = g["h"], g["w"]  # sideways: the surface's long side runs down the phone
+            k = min(W / g["vw"], H / g["vh"]); pw, phh = g["vw"] * k, g["vh"] * k
+            a, b = (W - pw) / 2 + 0.1 * pw, (H - phh) / 2 + 0.2 * phh
+            sx, sy = g["right"] - b, g["top"] + a
+            ph.tap("#tMode"); time.sleep(0.3)
+            log = gesture([{"type": "start", "pts": [[sx, sy]], "wait": 40}, {"type": "end", "pts": [[sx, sy]]}])
+            downs = [e for e in log if e["t"] == "down"]
+            check("phone: sideways, a tap lands exactly where you tap", downs and abs(downs[0]["x"] - 0.1) < 0.02 and abs(downs[0]["y"] - 0.2) < 0.02,
+                  f"x={downs[0]['x']:.3f} y={downs[0]['y']:.3f}" if downs else "no click")
+            ph.tap("#tMode"); time.sleep(0.4)
+            mx, my = g["right"] - g["w"] / 2, g["top"] + g["h"] / 2
+            log = gesture([{"type": "start", "pts": [[mx, my]]}] + [{"type": "move", "pts": [[mx, my + i * 10]]} for i in range(1, 9)] + [{"type": "end", "pts": [[mx, my + 80]]}])
+            mv = [e for e in log if e["t"] == "move"]
+            check("phone: sideways, dragging moves the pointer the right way", len(mv) >= 2 and mv[-1]["x"] - mv[0]["x"] > 0.02 and abs(mv[-1]["y"] - mv[0]["y"]) < 0.01,
+                  f"dx={mv[-1]['x'] - mv[0]['x']:.3f} dy={mv[-1]['y'] - mv[0]['y']:.3f}" if len(mv) >= 2 else "no moves")
+            ph.screenshot(path=f"{OUT}/phone-rotated.png")
+        ph.tap("#tRotate"); time.sleep(0.5)
+        check("phone: Upright turns it back", not ph.evaluate("document.body.classList.contains('rotated')") and not ph.evaluate("!!document.fullscreenElement"))
+
+        ph.tap("#moreBtn")
+        check("phone: picture settings open from one button", ph.locator("#quality").is_visible())
+        ph.screenshot(path=f"{OUT}/phone-settings.png")
+        ph.tap("#crumbName")
+        ph.screenshot(path=f"{OUT}/phone-session.png")
+        ph.tap("#disconnect")
+        expect(ph.locator("#status")).to_have_text("Not connected", timeout=5000)
+        check("phone: touch controls hide after disconnecting", not ph.locator("#touchbar").is_visible())
+        pctx.close()
+
         # ---- attack: man in the middle ----
         # Seen through an attacker, the real agent signs a different connection binding.
         time.sleep(6.5)  # the per-address connection budget refills one attempt every 6 s
