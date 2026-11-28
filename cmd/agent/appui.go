@@ -11,6 +11,7 @@ package main
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/subtle"
 	"embed"
 	"encoding/hex"
@@ -26,6 +27,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -70,22 +72,50 @@ func pingUI(lk uiLock) bool {
 	return resp.StatusCode == 200
 }
 
-// runningVersion asks the HopDesk that is already running which version it is.
-func runningVersion(lk uiLock) string {
+var (
+	buildOnce sync.Once
+	buildHash string
+)
+
+// buildID identifies this exact program file, so two builds with the same
+// version number (for example, local builds before tagging) still differ.
+func buildID() string {
+	buildOnce.Do(func() {
+		exe, err := os.Executable()
+		if err != nil {
+			return
+		}
+		f, err := os.Open(exe)
+		if err != nil {
+			return
+		}
+		defer f.Close()
+		h := sha256.New()
+		if _, err := io.Copy(h, f); err == nil {
+			buildHash = hex.EncodeToString(h.Sum(nil))[:16]
+		}
+	})
+	return buildHash
+}
+
+// runningVersion asks the HopDesk that is already running which version and
+// build it is.
+func runningVersion(lk uiLock) (ver, build string) {
 	req, _ := http.NewRequest("GET", fmt.Sprintf("http://127.0.0.1:%d/api/state", lk.Port), nil)
 	req.Header.Set("X-HopDesk-Token", lk.Token)
 	resp, err := (&http.Client{Timeout: 2 * time.Second}).Do(req)
 	if err != nil {
-		return ""
+		return "", ""
 	}
 	defer resp.Body.Close()
 	var st struct {
 		Version string `json:"version"`
+		Build   string `json:"build"`
 	}
 	if resp.StatusCode != 200 || json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&st) != nil {
-		return ""
+		return "", ""
 	}
-	return st.Version
+	return st.Version, st.Build
 }
 
 // quitRunning asks the HopDesk that is already running to quit, and waits until it has.
@@ -110,15 +140,16 @@ func quitRunning(lk uiLock) bool {
 	return false
 }
 
-// startUI starts the setup page. If the same version of HopDesk is already
-// running, it opens that instance's page and exits. An older or newer version
-// that is still running (for example, after installing an update) is asked to
+// startUI starts the setup page. If this same HopDesk is already running, it
+// opens that instance's page and exits. A different version or build that is
+// still running (after installing an update or a new local build) is asked to
 // quit, and this one takes over.
 func startUI(restarted bool) (*uiServer, error) {
 	lk := readUILock()
 	if !restarted && pingUI(lk) {
-		other := runningVersion(lk)
-		if other != version && quitRunning(lk) {
+		other, otherBuild := runningVersion(lk)
+		same := other == version && otherBuild != "" && otherBuild == buildID()
+		if !same && quitRunning(lk) {
 			log.Printf("replaced HopDesk %q that was still running", other)
 		} else {
 			log.Printf("HopDesk %s is already running; opening its page", other)
@@ -374,6 +405,7 @@ func newAgentKey() string {
 
 type uiState struct {
 	Version     string    `json:"version"`
+	Build       string    `json:"build"`
 	OS          string    `json:"os"`
 	State       string    `json:"state"`
 	Detail      string    `json:"detail"`
@@ -402,7 +434,7 @@ type uiState struct {
 
 func buildState() uiState {
 	var st uiState
-	st.Version, st.OS = version, runtime.GOOS
+	st.Version, st.Build, st.OS = version, buildID(), runtime.GOOS
 	st.State, st.Detail = getStatus()
 	st.Sessions = activeSessions()
 	st.Fingerprint = identityFingerprint()

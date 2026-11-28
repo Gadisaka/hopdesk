@@ -143,7 +143,7 @@ func TestOlderRunningInstanceIsAskedToQuit(t *testing.T) {
 	port := srv.Listener.Addr().(*net.TCPAddr).Port
 	lk := uiLock{Port: port, Token: token}
 
-	if v := runningVersion(lk); v != "0.0.1-old" {
+	if v, _ := runningVersion(lk); v != "0.0.1-old" {
 		t.Fatalf("runningVersion = %q", v)
 	}
 	go func() { <-quit; srv.Close() }()
@@ -152,5 +152,12 @@ func TestOlderRunningInstanceIsAskedToQuit(t *testing.T) {
 	}
 	if pingUI(lk) {
 		t.Fatal("old instance still answers")
+	}
+}
+
+func TestBuildID(t *testing.T) {
+	a := buildID()
+	if len(a) != 16 || a != buildID() {
+		t.Fatalf("buildID = %q, want a stable 16-character id", a)
 	}
 }
