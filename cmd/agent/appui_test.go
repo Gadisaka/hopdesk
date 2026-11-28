@@ -1,6 +1,7 @@
 package main
 
 import (
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -110,5 +111,46 @@ func TestPasswordChangeTakesEffectImmediately(t *testing.T) {
 	}
 	if string(getPwKey()) == before {
 		t.Fatal("password key didn't change")
+	}
+}
+
+// A newer HopDesk must replace an older one that is still running, instead of
+// handing over to it (which made a freshly installed update look like it never opened).
+func TestOlderRunningInstanceIsAskedToQuit(t *testing.T) {
+	token := strings.Repeat("cd", 32)
+	quit := make(chan struct{})
+	var srv *httptest.Server
+	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("X-HopDesk-Token") != token {
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+		switch r.URL.Path {
+		case "/api/ping":
+			w.Write([]byte(`{"ok":true}`))
+		case "/api/state":
+			w.Write([]byte(`{"version":"0.0.1-old"}`))
+		case "/api/quit":
+			if r.Method != http.MethodPost || !strings.HasPrefix(r.Header.Get("Content-Type"), "application/json") {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			w.Write([]byte(`{"ok":true}`))
+			close(quit)
+			go srv.CloseClientConnections()
+		}
+	}))
+	port := srv.Listener.Addr().(*net.TCPAddr).Port
+	lk := uiLock{Port: port, Token: token}
+
+	if v := runningVersion(lk); v != "0.0.1-old" {
+		t.Fatalf("runningVersion = %q", v)
+	}
+	go func() { <-quit; srv.Close() }()
+	if !quitRunning(lk) {
+		t.Fatal("old instance was not stopped")
+	}
+	if pingUI(lk) {
+		t.Fatal("old instance still answers")
 	}
 }

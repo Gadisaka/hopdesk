@@ -16,7 +16,7 @@ APP="$OUT/HopDesk.app"
 DMG="$OUT/HopDesk-$VERSION-macOS.dmg"
 
 echo "Building HopDesk $VERSION for macOS"
-rm -rf "$APP" "$OUT/dmg" "$OUT/HopDesk.iconset" "$DMG"
+rm -rf "$APP" "$OUT/dmg" "$OUT/HopDesk.iconset" "$OUT"/HopDesk-*-macOS.dmg   # keep only the newest .dmg
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 
 export CGO_ENABLED=1 MACOSX_DEPLOYMENT_TARGET=13.0

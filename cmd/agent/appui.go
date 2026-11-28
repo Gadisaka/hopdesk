@@ -16,6 +16,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"log"
 	"net"
@@ -68,13 +69,61 @@ func pingUI(lk uiLock) bool {
 	return resp.StatusCode == 200
 }
 
-// startUI starts the setup page. If HopDesk is already running, it opens
-// that instance's page and exits.
+// runningVersion asks the HopDesk that is already running which version it is.
+func runningVersion(lk uiLock) string {
+	req, _ := http.NewRequest("GET", fmt.Sprintf("http://127.0.0.1:%d/api/state", lk.Port), nil)
+	req.Header.Set("X-HopDesk-Token", lk.Token)
+	resp, err := (&http.Client{Timeout: 2 * time.Second}).Do(req)
+	if err != nil {
+		return ""
+	}
+	defer resp.Body.Close()
+	var st struct {
+		Version string `json:"version"`
+	}
+	if resp.StatusCode != 200 || json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&st) != nil {
+		return ""
+	}
+	return st.Version
+}
+
+// quitRunning asks the HopDesk that is already running to quit, and waits until it has.
+func quitRunning(lk uiLock) bool {
+	req, _ := http.NewRequest("POST", fmt.Sprintf("http://127.0.0.1:%d/api/quit", lk.Port), strings.NewReader("{}"))
+	req.Header.Set("X-HopDesk-Token", lk.Token)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := (&http.Client{Timeout: 2 * time.Second}).Do(req)
+	if err != nil {
+		return false
+	}
+	resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return false
+	}
+	for deadline := time.Now().Add(8 * time.Second); time.Now().Before(deadline); {
+		time.Sleep(250 * time.Millisecond)
+		if !pingUI(lk) {
+			return true
+		}
+	}
+	return false
+}
+
+// startUI starts the setup page. If the same version of HopDesk is already
+// running, it opens that instance's page and exits. An older or newer version
+// that is still running (for example, after installing an update) is asked to
+// quit, and this one takes over.
 func startUI(restarted bool) (*uiServer, error) {
 	lk := readUILock()
 	if !restarted && pingUI(lk) {
-		openURL(fmt.Sprintf("http://127.0.0.1:%d/#%s", lk.Port, lk.Token))
-		os.Exit(0)
+		other := runningVersion(lk)
+		if other != version && quitRunning(lk) {
+			log.Printf("replaced HopDesk %q that was still running", other)
+		} else {
+			log.Printf("HopDesk %s is already running; opening its page", other)
+			openURL(fmt.Sprintf("http://127.0.0.1:%d/#%s", lk.Port, lk.Token))
+			os.Exit(0)
+		}
 	}
 	if len(lk.Token) != 64 {
 		b := make([]byte, 32)
