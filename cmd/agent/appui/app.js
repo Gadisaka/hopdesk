@@ -49,22 +49,7 @@ function render(s) {
     $('grantAx').hidden = s.perms.accessibility;
   }
 
-  $('viewerUrl').textContent = s.host.viewerUrl;
-  $('agentUrl').textContent = s.host.agentUrl || '(needs Tailscale, see above)';
-  const ts = $('tsNote');
-  ts.classList.toggle('warn', !s.host.dnsName);
-  if (!s.host.tailscale) {
-    ts.innerHTML = '<b>Install Tailscale</b> (free) on this and your other computers so they can reach this one securely from anywhere, then come back here.';
-  } else if (!s.host.dnsName) {
-    ts.textContent = 'Tailscale is installed but not signed in. Open Tailscale, sign in, then reload this page.';
-  } else {
-    ts.innerHTML = 'Tailscale name: <code></code>. Turn on HTTPS so other computers and browsers can connect: <button class="secondary" id="tsServe">Enable HTTPS with Tailscale</button>';
-    ts.querySelector('code').textContent = s.host.dnsName;
-    $('tsServe').onclick = async () => {
-      try { await api('tailscale-serve', {}); msg('HTTPS is on: open ' + s.host.viewerUrl + ' from your other devices.', true); }
-      catch (e) { msg(e.message); }
-    };
-  }
+  renderTailnet(s);
 
   // Fill the form once, then leave the user's edits alone.
   if (firstLoad || !dirty) {
@@ -81,6 +66,68 @@ function render(s) {
   }
 }
 
+// Text with https:// links turned into real links (built with DOM nodes, never innerHTML).
+function linkified(text) {
+  const frag = document.createDocumentFragment();
+  let last = 0;
+  for (const m of text.matchAll(/https:\/\/[^\s)]+/g)) {
+    frag.append(text.slice(last, m.index));
+    const a = document.createElement('a');
+    a.href = m[0]; a.textContent = m[0]; a.target = '_blank'; a.rel = 'noopener noreferrer';
+    frag.append(a);
+    last = m.index + m[0].length;
+  }
+  frag.append(text.slice(last));
+  return frag;
+}
+
+function renderTailnet(s) {
+  const t = s.host.tailnet, note = $('tsNote');
+  const savedHost = s.setupDone && s.config.mode === 'host';
+  note.className = 'note';
+  note.replaceChildren();
+  $('tsLinks').hidden = !(savedHost && t.public);
+  $('tsSignOutRow').hidden = !(savedHost && (t.state === 'running'));
+  $('viewerUrl').textContent = s.host.viewerUrl || '';
+  $('agentUrl').textContent = s.host.agentUrl || '';
+  if (!savedHost) {
+    note.textContent = 'After you save, HopDesk connects this computer to Tailscale (built in, nothing to install) so your other devices and any browser can reach it from anywhere. You only need a free Tailscale account on this computer.';
+    return;
+  }
+  switch (t.state) {
+    case 'starting':
+      note.textContent = 'Connecting to Tailscale…';
+      break;
+    case 'needs-login': {
+      note.classList.add('warn');
+      note.append('Sign in to Tailscale (free) once, so your other devices can reach this computer from anywhere.');
+      const b = document.createElement('button');
+      b.textContent = t.authUrl ? 'Sign in to Tailscale' : 'Getting the sign-in link…';
+      b.disabled = !t.authUrl;
+      b.onclick = () => window.open(t.authUrl, '_blank', 'noopener');
+      note.append(b);
+      break;
+    }
+    case 'running':
+      if (t.public) {
+        note.classList.add('good');
+        note.append('Reachable from anywhere. Open the address below in any browser, or give it to your other computers. Nothing else to install.');
+      } else {
+        note.classList.add('warn');
+        note.append('Signed in to Tailscale as ' + t.dnsName + '. One more step: ');
+        note.append(linkified(t.problem || 'waiting for Tailscale Funnel…'));
+        note.append(' (HopDesk retries automatically.)');
+      }
+      break;
+    case 'error':
+      note.classList.add('warn');
+      note.append(linkified('Tailscale: ' + (t.problem || 'something went wrong; see the log.')));
+      break;
+    default:
+      note.textContent = 'Tailscale is off.';
+  }
+}
+
 async function refresh() {
   try { render(await api('state')); }
   catch (e) { $('pill').textContent = 'Not running'; $('pill').className = 'pill error'; }
@@ -94,6 +141,12 @@ document.querySelectorAll('input, select').forEach((el) => el.addEventListener('
 $('modeConnect').onclick = () => { setMode('connect'); dirty = true; };
 $('modeHost').onclick = () => { setMode('host'); dirty = true; };
 $('showKey').onclick = () => { const k = $('hostKey'); k.type = k.type === 'password' ? 'text' : 'password'; };
+$('copyViewer').onclick = () => navigator.clipboard.writeText($('viewerUrl').textContent).then(() => msg('Address copied', true));
+$('copyAgent').onclick = () => navigator.clipboard.writeText($('agentUrl').textContent).then(() => msg('Server address copied', true));
+$('tsSignOut').onclick = async () => {
+  if (!confirm('Sign this computer out of Tailscale? Your other devices will lose access until you sign in again.')) return;
+  try { await api('tailscale-logout', {}); msg('Signed out. Restarting…', true); } catch (e) { msg(e.message); }
+};
 $('copyKey').onclick = () => navigator.clipboard.writeText($('hostKey').value).then(() => msg('Agent key copied', true));
 $('newKey').onclick = () => { if (confirm('Make a new agent key? Your other computers will need the new one.')) newKey(); };
 

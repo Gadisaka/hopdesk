@@ -253,15 +253,13 @@ func (u *uiServer) api(w http.ResponseWriter, r *http.Request) {
 		requestPermission(in.Which)
 		writeJSON(w, 200, map[string]bool{"ok": true})
 
-	case "/api/tailscale-serve":
-		appMu.Lock()
-		port := appCfg.hostPort()
-		appMu.Unlock()
-		if err := tailscaleServe(port); err != nil {
+	case "/api/tailscale-logout":
+		if err := tailnetLogout(); err != nil {
 			writeJSON(w, 500, map[string]string{"error": err.Error()})
 			return
 		}
 		writeJSON(w, 200, map[string]bool{"ok": true})
+		go func() { time.Sleep(500 * time.Millisecond); restartSelf() }()
 
 	case "/api/new-key":
 		writeJSON(w, 200, map[string]string{"agentKey": newAgentKey()})
@@ -308,10 +306,10 @@ type uiState struct {
 	} `json:"perms"`
 	Autostart bool `json:"autostartSupported"`
 	Host      struct {
-		ViewerURL string `json:"viewerUrl"`
-		AgentURL  string `json:"agentUrl"`
-		Tailscale bool   `json:"tailscale"`
-		DNSName   string `json:"dnsName"`
+		LocalURL  string       `json:"localUrl"`
+		ViewerURL string       `json:"viewerUrl"`
+		AgentURL  string       `json:"agentUrl"`
+		Tailnet   tailnetState `json:"tailnet"`
 	} `json:"host"`
 }
 
@@ -335,13 +333,11 @@ func buildState() uiState {
 		st.Perms.Screen, st.Perms.Accessibility = permScreen(), permAccessibility()
 	}
 	st.Autostart = autostartSupported()
-	st.Host.Tailscale = tailscaleCLI() != ""
-	if dns, err := tailscaleDNSName(); err == nil && dns != "" {
-		st.Host.DNSName = dns
-		st.Host.ViewerURL = "https://" + dns
-		st.Host.AgentURL = "wss://" + dns + "/ws"
-	} else {
-		st.Host.ViewerURL = "http://localhost:" + st.Config.hostPort()
+	st.Host.LocalURL = "http://localhost:" + st.Config.hostPort()
+	st.Host.Tailnet = getTailnet()
+	if t := st.Host.Tailnet; t.Public && t.DNSName != "" {
+		st.Host.ViewerURL = "https://" + t.DNSName
+		st.Host.AgentURL = "wss://" + t.DNSName + "/ws"
 	}
 	return st
 }

@@ -21,6 +21,7 @@
   <img alt="Agent: macOS | Windows" src="https://img.shields.io/badge/agent-macOS%20%7C%20Windows-555">
   <img alt="Viewer: any browser" src="https://img.shields.io/badge/viewer-any%20browser-3b82f6">
   <img alt="WebRTC" src="https://img.shields.io/badge/transport-WebRTC-8b5cf6">
+  <a href="https://github.com/gadisaka/hopdesk/releases"><img alt="Latest release" src="https://img.shields.io/github/v/release/gadisaka/hopdesk"></a>
 </p>
 
 > [!CAUTION]
@@ -55,7 +56,7 @@ hopdesk is a personal alternative to RustDesk, TeamViewer and AnyDesk. Install t
 
 ## Desktop app
 
-The easiest way to use HopDesk. Download `HopDesk-…-macOS.dmg` or `HopDesk-…-Windows-Setup.exe` from the [Releases](../../releases) page, or [build them yourself](#build-the-installers).
+The easiest way to use HopDesk. Download `HopDesk-…-macOS.dmg` or `HopDesk-…-Windows-Setup.exe` from the [Releases](https://github.com/gadisaka/hopdesk/releases) page, or [build them yourself](#build-the-installers).
 
 **macOS:** open the `.dmg` and drag **HopDesk** to Applications. The builds aren't notarized by Apple (that needs a paid developer account), so the first time, open it, then go to **System Settings → Privacy & Security** and click **Open Anyway**. HopDesk lives in the menu bar.
 
@@ -65,7 +66,7 @@ The app opens its **setup page** in your browser:
 1. **Save the password** it shows (it's shown once).
 2. **macOS:** click **Grant** for Screen Recording and Accessibility, switch HopDesk on in the window that opens, then click **Restart HopDesk**.
 3. **Choose how this computer connects:**
-   - **This computer is the server:** pick this on the computer that's on most of the time. With [Tailscale](https://tailscale.com) installed, click **Enable HTTPS with Tailscale**. The page then shows the viewer address and the server address plus agent key for your other computers.
+   - **This computer is the server:** pick this on the computer that's on most of the time. Tailscale is **built in**, so there's nothing to install. After saving, click **Sign in to Tailscale** and use a free account. The setup page then shows an `https://hopdesk-….ts.net` address that works from any browser anywhere, plus the server address and agent key for your other computers.
    - **Use a HopDesk server:** paste the server address and agent key from the server's setup page.
 4. Click **Save and restart**. The menu-bar/tray icon shows **Online as <name>**.
 
@@ -76,6 +77,10 @@ Then open the viewer address in a browser on any of your devices, and enter the 
   <a href="docs/images/app-host.png"><img src="docs/images/app-host.png" alt="HopDesk setup page as the server, with Tailscale" width="420"></a>
 </p>
 
+**The server computer, step by step:** sign in once, switch on HTTPS if Tailscale asks (the page links straight to the right admin page), and then it's reachable from anywhere.
+
+<p align="center"><a href="docs/images/tailscale-steps.png"><img src="docs/images/tailscale-steps.png" alt="Sign in to Tailscale, enable HTTPS, then reachable from anywhere" width="420"></a></p>
+
 Good to know:
 - **Unsigned Mac builds:** macOS ties the permissions to the exact build, so after updating to a new version you may need to switch Screen Recording and Accessibility off and on again. Signed builds keep them.
 - **Settings** are kept in `~/Library/Application Support/hopdesk` (macOS) or `%APPDATA%\hopdesk` (Windows), including this computer's identity. Reinstalling keeps the same fingerprint.
@@ -84,7 +89,7 @@ Good to know:
 ## Quick start (command line)
 
 ```sh
-git clone https://github.com/YOUR-USERNAME/hopdesk.git && cd hopdesk
+git clone https://github.com/gadisaka/hopdesk.git && cd hopdesk
 go mod tidy
 
 # 1. the server (secrets go in environment variables, not on the command line)
@@ -192,7 +197,13 @@ For the best picture:
 
 Both sides must reach the server, and WebRTC must reach **each other**. Behind home routers and carrier-grade NAT, a direct path often fails.
 
-**Option A: Tailscale (easiest, free).** Install Tailscale on every device and sign in with one account. On the computer running the server, turn on MagicDNS and HTTPS certificates in the Tailscale admin console, then:
+**Option A: the desktop app's built-in Tailscale (easiest, free).** Choose **This computer is the server** in the HopDesk app and sign in to a free Tailscale account. HopDesk runs its own Tailscale node ([tsnet](https://pkg.go.dev/tailscale.com/tsnet)) and publishes the server with [Tailscale Funnel](https://tailscale.com/kb/1223/funnel):
+- **Reachable from anywhere:** viewers and other computers connect to `https://hopdesk-<name>.<tailnet>.ts.net` with nothing installed.
+- **Built-in relay:** when two devices can't connect directly (for example, both behind carrier-grade NAT), a TURN relay inside HopDesk carries the video over the same Funnel.
+- **One-time setup:** your tailnet needs HTTPS certificates switched on and Funnel allowed. If either is missing, the setup page shows the exact link.
+- **Relay limits:** Funnel traffic has bandwidth limits Tailscale doesn't publish. Direct connections are always tried first and run at full quality, but relayed sessions may be capped below Ultra. For guaranteed quality through a relay, use Option C.
+
+**Option B: Tailscale installed on every device** (no Funnel, private to your tailnet). Install Tailscale everywhere and sign in with one account. On the computer running the server, turn on MagicDNS and HTTPS certificates in the Tailscale admin console, then:
 
 ```sh
 ./hopdesk-server -addr 127.0.0.1:8080 -behind-proxy
@@ -201,7 +212,7 @@ tailscale serve --bg 8080        # HTTPS with a real certificate, only inside yo
 
 Open `https://<that-machine>.<your-tailnet>.ts.net` to view, and point agents at `wss://<that-machine>.<your-tailnet>.ts.net/ws`. You don't need open ports or a relay.
 
-**Option B: a small VPS.** Run `hopdesk-server` with TLS plus **coturn** as a TURN relay:
+**Option C: a small VPS.** Run `hopdesk-server` with TLS plus **coturn** as a TURN relay:
 
 ```sh
 ./hopdesk-server -addr :443 -tls-cert cert.pem -tls-key key.pem \
@@ -220,7 +231,7 @@ Agents use `wss://your.vps/ws`, and you open `https://your.vps`. Open TCP 443 an
   - `tray.go`: the menu-bar / notification-area icon
   - `perms_darwin.go`: macOS permission checks and prompts
   - `system_*.go`: start at login, restart, opening links
-  - `tailscale.go`: finds this computer's Tailscale name and turns on `tailscale serve`
+  - `tailnet.go`: built-in Tailscale (tsnet): sign-in, Funnel, and the TURN relay
   - `identity.go`: the agent's identity key and stored password key
   - `guard.go`: password lockouts and session caps
   - `stream_h264.go`: ffmpeg → RTP → WebRTC video
@@ -283,6 +294,7 @@ The tests don't cover the agent's screen capture, input injection or ffmpeg on a
 - Downloads are held in browser memory until complete, so multi-GB files may fail. Uploads stream to disk.
 - The keyboard uses a US-layout physical key map, with other characters typed directly. The browser keeps a few shortcuts (Cmd+W, Cmd+Q, Cmd+Tab).
 - Windows: admin (UAC) windows and the login screen need the agent to run as administrator or as a service. macOS: works while a user is logged in.
+- Video relayed through the built-in Tailscale Funnel is subject to Tailscale's bandwidth limits. Direct connections aren't.
 - On Windows, the bundled ffmpeg encodes with Media Foundation (`h264_mf`). If that fails on a particular PC, HopDesk falls back to JPEG frames: install a full ffmpeg build with x264 next to `HopDesk.exe` for the best quality.
 
 ## Security
@@ -301,6 +313,7 @@ How hopdesk handles each threat:
 | Being watched unnoticed | A desktop notification when a session starts and ends, optional approve/deny prompt (`-confirm`), and an idle disconnect. |
 | Clipboard attacks | The remote clipboard is only copied when you click. `-clipboard` can limit or disable sync. |
 | Secrets leaking | Secrets come from environment variables, not command-line flags (warned if used), and TURN credentials are short-lived. |
+| Built-in Tailscale Funnel (public address) | Only the viewer page, signaling and the relay are published, all behind the protections above. The relay only accepts short-lived credentials and relays between sessions on this computer. Sign out of Tailscale from the setup page to take it offline. |
 | The app's setup page | Listens on this computer only, needs a random token for every request, and checks Host and Origin, so other websites and other users can't change settings. |
 | Malicious file names | Uploads are stripped of folders, reserved Windows names are renamed, and existing files are never overwritten. |
 
@@ -310,3 +323,7 @@ What's still up to you:
 - **Anyone with the password has full control**, including your files. Use the generated password, or a long one, and `-confirm` on shared computers.
 - **The 30-per-hour cap** means a determined attacker spread across many addresses can pause new logins for a while, though not break in. If that happens, the agent log shows it.
 - **This is a personal project and has not had a professional security audit.**
+
+## Author
+
+Made by [@gadisaka](https://github.com/gadisaka). Bug reports and ideas are welcome in [Issues](https://github.com/gadisaka/hopdesk/issues).

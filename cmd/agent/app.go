@@ -207,8 +207,6 @@ func stderrOrDiscard() io.Writer {
 	return os.Stderr
 }
 
-var hostDNS string // Tailscale name of this computer when it's the server
-
 func runApp(restarted bool) {
 	setupAppLogging()
 	c, exists, err := loadAppConfig()
@@ -244,19 +242,26 @@ func startServices(c appConfig) {
 	*serverURL = c.ServerURL
 
 	if c.Mode == "host" {
+		// The built-in server: on this computer for its own agent and browser,
+		// and published through the bundled Tailscale for everyone else.
 		*serverURL = c.localWS()
-		cfg := server.Config{Addr: c.HostListen, AgentKey: c.AgentKey, STUN: server.DefaultSTUN, BehindProxy: true}
-		if dns, err := tailscaleDNSName(); err == nil && dns != "" {
-			hostDNS = dns
-			cfg.AllowOrigin = "https://" + dns
+		srv, err := server.New(context.Background(), server.Config{Addr: c.HostListen, AgentKey: c.AgentKey, STUN: server.DefaultSTUN})
+		if err != nil {
+			setStatus("error", "Built-in server: "+err.Error())
+			return
+		}
+		ln, err := net.Listen("tcp", c.HostListen)
+		if err != nil {
+			setStatus("error", "Built-in server: "+err.Error())
+			return
 		}
 		go func() {
-			if err := server.Run(context.Background(), cfg); err != nil {
+			if err := srv.Serve(ln); err != nil {
 				log.Printf("built-in server: %v", err)
 				setStatus("error", "Built-in server: "+err.Error())
 			}
 		}()
-		time.Sleep(300 * time.Millisecond)
+		go startTailnet(srv)
 	}
 	if err := checkServerURL(*serverURL); err != nil {
 		setStatus("error", err.Error())

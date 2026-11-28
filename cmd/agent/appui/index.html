@@ -43,6 +43,9 @@
   .mode span { color: #8b8d94; font-size: 13px; }
   .note { background: #141a24; border: 1px solid #23324a; border-radius: 10px; padding: 12px 14px; color: #b9c6dc; line-height: 1.5; margin: 10px 0; }
   .warn { background: #2a1d0c; border-color: #4a3412; color: #f5d39b; }
+  .good { background: #0f2419; border-color: #1d4630; color: #a7e8c0; }
+  .note a { color: #8ab4ff; }
+  .note button { margin-left: 8px; }
   .check { display: flex; gap: 8px; align-items: center; margin: 8px 0; color: #ccc; }
   .actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 6px; position: sticky; bottom: 0; padding: 12px 0; background: linear-gradient(transparent, #111214 30%); }
   .msg { flex: 1; align-self: center; color: #f87171; }
@@ -93,7 +96,7 @@
     <h2>Connection</h2>
     <div class="modes">
       <div class="mode" data-mode="connect" id="modeConnect"><b>Use a HopDesk server</b><span>Another computer (or a VPS) runs the server.</span></div>
-      <div class="mode" data-mode="host" id="modeHost"><b>This computer is the server</b><span>Your other computers connect here. Best with Tailscale.</span></div>
+      <div class="mode" data-mode="host" id="modeHost"><b>This computer is the server</b><span>Your other devices connect here from anywhere. Tailscale is built in.</span></div>
     </div>
     <div id="connectBox">
       <div class="row"><label for="serverUrl">Server address</label><input id="serverUrl" type="text" class="mono" placeholder="wss://mymac.your-tailnet.ts.net/ws" spellcheck="false"></div>
@@ -101,10 +104,13 @@
     </div>
     <div id="hostBox" hidden>
       <div class="note" id="tsNote"></div>
-      <div class="row"><label>Viewer address</label><code id="viewerUrl"></code></div>
-      <div class="row"><label>For other computers</label><span style="flex:1;color:#8b8d94">server address <code id="agentUrl"></code></span></div>
+      <div id="tsLinks" hidden>
+        <div class="row"><label>Open from any browser</label><code id="viewerUrl" style="flex:1"></code><button class="secondary" id="copyViewer">Copy</button></div>
+        <div class="row"><label>Other computers' server</label><code id="agentUrl" style="flex:1"></code><button class="secondary" id="copyAgent">Copy</button></div>
+      </div>
       <div class="row"><label for="hostKey">Agent key</label><input id="hostKey" type="password" class="mono" readonly><button class="secondary" id="showKey">Show</button><button class="secondary" id="copyKey">Copy</button><button class="secondary" id="newKey">New key</button></div>
-      <div class="row"><label for="hostListen">Listen on</label><input id="hostListen" type="text" class="mono"></div>
+      <div class="row"><label for="hostListen">Local address</label><input id="hostListen" type="text" class="mono"></div>
+      <div class="row" id="tsSignOutRow" hidden><span style="flex:1;color:#8b8d94">Tailscale account: signed in</span><button class="secondary" id="tsSignOut">Sign out of Tailscale</button></div>
     </div>
   </div>
 

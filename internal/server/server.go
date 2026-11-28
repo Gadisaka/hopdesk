@@ -201,6 +201,7 @@ func (p *peer) send(m proto.Msg) error {
 // Server is a running signaling server.
 type Server struct {
 	cfg      Config
+	turnMu   sync.RWMutex // TURN settings can be set after start (desktop app + Tailscale)
 	mu       sync.Mutex
 	agents   map[string]*peer
 	viewers  map[string]*peer // session -> viewer
@@ -237,16 +238,19 @@ func (s *Server) iceServers() []proto.ICEServer {
 	if s.cfg.STUN != "" {
 		out = append(out, proto.ICEServer{URLs: []string{s.cfg.STUN}})
 	}
-	if s.cfg.TURN != "" {
+	s.turnMu.RLock()
+	turnURL, turnSecret := s.cfg.TURN, s.cfg.TURNSecret
+	s.turnMu.RUnlock()
+	if turnURL != "" {
 		user, pass := s.cfg.TURNUser, s.cfg.TURNPass
-		if s.cfg.TURNSecret != "" {
+		if turnSecret != "" {
 			// coturn "use-auth-secret": username = expiry, password = HMAC-SHA1(secret, username).
 			user = fmt.Sprintf("%d:hopdesk", time.Now().Add(time.Hour).Unix())
-			m := hmac.New(sha1.New, []byte(s.cfg.TURNSecret))
+			m := hmac.New(sha1.New, []byte(turnSecret))
 			m.Write([]byte(user))
 			pass = base64.StdEncoding.EncodeToString(m.Sum(nil))
 		}
-		out = append(out, proto.ICEServer{URLs: []string{s.cfg.TURN}, Username: user, Credential: pass})
+		out = append(out, proto.ICEServer{URLs: []string{turnURL}, Username: user, Credential: pass})
 	}
 	return out
 }
@@ -468,20 +472,42 @@ func (s *Server) Handler() http.Handler {
 	return mux
 }
 
-// Run serves until ctx is cancelled or the listener fails.
-func Run(ctx context.Context, cfg Config) error {
-	s, err := New(ctx, cfg)
-	if err != nil {
-		return err
-	}
-	srv := &http.Server{
-		Addr:              cfg.Addr,
+// SetTURN points viewers and agents at a TURN relay that uses short-lived
+// credentials derived from secret (coturn "use-auth-secret" style).
+func (s *Server) SetTURN(url, secret string) {
+	s.turnMu.Lock()
+	s.cfg.TURN, s.cfg.TURNSecret = url, secret
+	s.turnMu.Unlock()
+}
+
+func (s *Server) httpServer() *http.Server {
+	return &http.Server{
 		Handler:           s.Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		IdleTimeout:       120 * time.Second,
 		MaxHeaderBytes:    16 << 10,
 	}
+}
+
+// Serve serves on an existing listener (for example a Tailscale Funnel
+// listener). One Server can serve several listeners.
+func (s *Server) Serve(ln net.Listener) error {
+	err := s.httpServer().Serve(ln)
+	if errors.Is(err, http.ErrServerClosed) {
+		return nil
+	}
+	return err
+}
+
+// Run serves until ctx is cancelled or the listener fails.
+func Run(ctx context.Context, cfg Config) error {
+	s, err := New(ctx, cfg)
+	if err != nil {
+		return err
+	}
+	srv := s.httpServer()
+	srv.Addr = cfg.Addr
 	go func() {
 		<-ctx.Done()
 		sctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
