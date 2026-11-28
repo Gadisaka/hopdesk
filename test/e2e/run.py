@@ -215,6 +215,28 @@ try:
         v.click("#disconnect")
         expect(v.locator("#status")).to_have_text("Not connected", timeout=5000)
 
+        # ---- your devices ----
+        card = v.locator("#recentList .dev", has_text="studio-mac")
+        expect(card).to_be_visible(timeout=5000)
+        check("the device you connected to is listed", card.count() == 1)
+        expect(card.locator(".dev-state")).to_have_text("Online", timeout=8000)
+        check("…with its online status", True)
+        v.fill("#id", ""); card.locator(".dev-main").click()
+        check("tapping it fills in the device and asks for the password",
+              v.input_value("#id") == "studio-mac" and v.evaluate("document.activeElement.id") == "pw")
+        check("passwords are left to the password manager, never stored",
+              v.get_attribute("#pw", "autocomplete") == "current-password" and "correct-horse" not in json.dumps(v.evaluate("Object.assign({}, localStorage)")))
+        card.locator(".dev-more").click(); v.locator(".dev-menu button", has_text="Rename").click()
+        v.fill(".dev-rename", "Studio Mac"); v.press(".dev-rename", "Enter")
+        expect(v.locator("#recentList .dev b")).to_have_text("Studio Mac", timeout=3000)
+        check("devices can be renamed", "studio-mac" in v.locator("#recentList .dev small").inner_text())
+        v.screenshot(path=f"{OUT}/devices.png")
+        v.locator("#recentList .dev-more").click(); v.locator(".dev-menu button", has_text="Remove").click()
+        check("devices can be removed", v.locator("#recentList .dev").count() == 0)
+        v.locator("#toastBtn").click()
+        check("…with Undo", v.locator("#recentList .dev").count() == 1)
+        v.fill("#id", "studio-mac")
+
         # ---- a phone: touch gestures and the on-screen keyboard ----
         time.sleep(6.5)  # connection budget
         pctx = browser.new_context(viewport={"width": 390, "height": 844}, device_scale_factor=3, is_mobile=True,
@@ -222,6 +244,9 @@ try:
         pctx.add_init_script("try { localStorage.setItem('hopdesk-tour-viewer-connect-v1', 'done') } catch (e) {}")
         ph = pctx.new_page()
         ph.goto("http://127.0.0.1:8080/")
+        check("phone: suggests adding HopDesk to the home screen", ph.locator("#installTip").is_visible())
+        check("phone: the page can be installed like an app", ph.evaluate("fetch('manifest.json').then(r => r.json()).then(m => m.display)") == "standalone")
+        ph.screenshot(path=f"{OUT}/phone-connect.png")
         ph.fill("#id", "studio-mac"); ph.fill("#pw", PW); ph.tap("#connect")
         expect(ph.locator("#modal")).to_be_visible(timeout=15000)
         ph.tap("#mOk")

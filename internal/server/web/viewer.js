@@ -188,6 +188,7 @@ function disconnect(keepStatus) {
   $('hint').hidden = false;
   $('login').hidden = false; $('controls').hidden = true; $('files').hidden = true;
   if (window.HopTouch) HopTouch.onDisconnected();
+  if (window.HopDevices) HopDevices.shown();
   if (!keepStatus) setStatus('Not connected');
 }
 
@@ -202,6 +203,7 @@ function onCtrl(m) {
         setStatus(why); disconnect(true); return;
       }
       connected = true;
+      if (window.HopDevices) HopDevices.remember($('id').value.trim());
       $('pw').value = '';
       $('crumbName').textContent = $('id').value.trim();
       setStatus('Connected to ' + $('id').value.trim());
@@ -466,9 +468,12 @@ surface.addEventListener('drop', (e) => {
   for (const f of e.dataTransfer.files) upload(f);
 });
 
-$('connect').onclick = () => connect().catch((err) => { setStatus('Error: ' + err.message); disconnect(true); });
+// A form submit (button or Enter) lets password managers offer to save the password.
+$('login').addEventListener('submit', (e) => {
+  e.preventDefault();
+  connect().catch((err) => { setStatus('Error: ' + err.message); disconnect(true); });
+});
 $('disconnect').onclick = () => disconnect();
-$('pw').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('connect').click(); });
 
 // The cryptography above needs a secure page (HTTPS or localhost).
 if (!window.isSecureContext || !window.crypto || !crypto.subtle) {
@@ -483,6 +488,8 @@ const CONNECT_TOUR = [
   { title: 'Welcome to HopDesk',
     text: ['From this page you can see and control another computer that has the HopDesk app installed.',
            'Quick tour of what to type? It takes 30 seconds, or skip it.'] },
+  { el: '#recent', title: 'Your devices',
+    text: ['Computers you have connected to from this browser, with a green dot when they are online. Tap one, then enter its password.'] },
   { el: '#id', title: 'Device',
     text: ['The name of the computer you want to control, for example studio-mac.',
            'You can find it at the top of the HopDesk app on that computer.'] },

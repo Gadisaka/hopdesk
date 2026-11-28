@@ -60,12 +60,15 @@ func RandomKey() string { return randHex(24) }
 // ---- per-IP limits ----
 
 const (
-	maxConnsPerIP   = 16              // open WebSockets from one address
-	offerBurst      = 5               // connection attempts allowed at once…
-	offerEvery      = 6 * time.Second // …then one per 6 s (10/min) per address
-	agentOfferBurst = 10              // attempts per device, from all addresses…
-	agentOfferEvery = 3 * time.Second // …then 20/min
-	badKeyLimit     = 5               // wrong agent keys before a lockout
+	maxConnsPerIP   = 16               // open WebSockets from one address
+	offerBurst      = 5                // connection attempts allowed at once…
+	offerEvery      = 6 * time.Second  // …then one per 6 s (10/min) per address
+	agentOfferBurst = 10               // attempts per device, from all addresses…
+	agentOfferEvery = 3 * time.Second  // …then 20/min
+	presenceBurst   = 6                // "which of my devices are online?" checks at once…
+	presenceEvery   = 10 * time.Second // …then 6/min per address
+	presenceMaxIDs  = 10               // device names per check
+	badKeyLimit     = 5                // wrong agent keys before a lockout
 	badKeyLockout   = 15 * time.Minute
 )
 
@@ -92,6 +95,7 @@ func (b *bucket) take(burst int, every time.Duration) bool {
 type ipState struct {
 	conns    int
 	offers   bucket
+	presence bucket
 	badKeys  int
 	badUntil time.Time
 	seen     time.Time
@@ -165,6 +169,12 @@ func (l *limiter) allowOffer(ip, agentID string) bool {
 		l.agents[agentID] = b
 	}
 	return b.take(agentOfferBurst, agentOfferEvery)
+}
+
+func (l *limiter) allowPresence(ip string) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.get(ip).presence.take(presenceBurst, presenceEvery)
 }
 
 func (l *limiter) keyLocked(ip string) bool {
@@ -433,7 +443,7 @@ func securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
 		h.Set("Content-Security-Policy", "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; "+
-			"img-src 'self' blob: data:; media-src 'self' blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'")
+			"img-src 'self' blob: data:; media-src 'self' blob:; connect-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'")
 		h.Set("X-Content-Type-Options", "nosniff")
 		h.Set("X-Frame-Options", "DENY")
 		h.Set("Referrer-Policy", "no-referrer")
@@ -464,12 +474,53 @@ func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("/", securityHeaders(http.FileServer(http.FS(sub))))
 	mux.HandleFunc("/ws", s.serveWS)
+	mux.Handle("/online", securityHeaders(http.HandlerFunc(s.serveOnline)))
 	mux.Handle("/config", securityHeaders(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Cache-Control", "no-store")
 		_ = json.NewEncoder(w).Encode(map[string]any{"iceServers": s.iceServers()})
 	})))
 	return mux
+}
+
+// serveOnline tells the viewer which of the devices it remembers are online:
+// GET /online?ids=a,b,c answers {"online":{"a":true,"b":false,"c":false}}.
+// It reveals no more than a connection attempt does ("that device is not
+// online"), is rate limited per address, and only answers this server's own
+// page (browsers mark requests from other sites with Sec-Fetch-Site).
+func (s *Server) serveOnline(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if site := r.Header.Get("Sec-Fetch-Site"); site != "" && site != "same-origin" && site != "none" {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	if !s.originOK(r) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	if !s.lim.allowPresence(s.clientIP(r)) {
+		http.Error(w, "too many requests", http.StatusTooManyRequests)
+		return
+	}
+	out := map[string]bool{}
+	s.mu.Lock()
+	for _, id := range strings.Split(r.URL.Query().Get("ids"), ",") {
+		if id = strings.TrimSpace(id); id == "" || len(id) > 64 {
+			continue
+		}
+		if len(out) >= presenceMaxIDs {
+			break
+		}
+		_, on := s.agents[id]
+		out[id] = on
+	}
+	s.mu.Unlock()
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{"online": out})
 }
 
 // SetTURN points viewers and agents at a TURN relay that uses short-lived

@@ -4,13 +4,13 @@
 go test ./...                                   # auth, lockouts, URL policy, file names, identity file, settings-page security
 go build -o hopdesk-server ./cmd/server
 pip install playwright && playwright install chromium
-python3 test/e2e/run.py                         # 52 end-to-end checks, including attacks
+python3 test/e2e/run.py                         # 66 end-to-end checks, including attacks
 python3 test/e2e/crosscheck.py                  # Go and the browser agree on the crypto
 ```
 
 [`test/e2e/run.py`](../test/e2e/run.py) starts the real server and drives the real viewer in Chrome, against a stand-in agent that speaks the full agent protocol. It covers:
 
-- **Features:** video, mouse position, keyboard, clipboard, quality settings, the file browser, byte-exact uploads and downloads, the first-run tours, the guide page, and a phone: touch gestures, pinch-zoom and the on-screen keyboard.
+- **Features:** video, mouse position, keyboard, clipboard, quality settings, the file browser, byte-exact uploads and downloads, the first-run tours, the guide page, the device list, and a phone: touch gestures, pinch-zoom, Rotate and the on-screen keyboard.
 - **Attacks:** an impostor agent, a man in the middle, cross-site WebSockets, connection floods, agent-key guessing, wrong passwords, clickjacking headers, and running the viewer over plain HTTP.
 
 Set `SCREENSHOTS=docs/images` to refresh the screenshots.

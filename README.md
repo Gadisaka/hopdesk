@@ -55,6 +55,7 @@ HopDesk is a remote desktop you run yourself, an open alternative to TeamViewer,
 | **Reachable from anywhere** | Tailscale is built in. Sign in once and get an `https://` address that works from any browser, with no ports or router settings. |
 | **Sharp, fast video** | H.264 up to native resolution (4K) at up to 60 fps, using the hardware encoder where available, with automatic fallback. |
 | **Full control** | Mouse, keyboard and shortcuts, multiple monitors, and Cmd → Ctrl mapping for Mac-to-Windows. |
+| **Your devices, one tap away** | The viewer lists the computers you use, with live online status. Your password manager fills in passwords, and you can add HopDesk to your phone's home screen like an app. |
 | **Works on your phone** | Touchpad or direct touch, two-finger scroll and right-click, pinch to zoom, a Rotate button for a bigger, sideways picture, and a keyboard with Esc, Tab, Ctrl, Alt, Cmd and the arrows. |
 | **Clipboard and files** | Copy and paste in both directions. Drop files on the screen to send them, or browse the remote computer and download. |
 | **Secure by design** | WebRTC encryption, a per-device identity key the viewer remembers (like SSH), and a password that's never sent anywhere. [Threat model →](SECURITY.md) |
