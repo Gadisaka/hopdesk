@@ -8,7 +8,12 @@ let frames = new Map(), lastDrawn = -1;
 const pressed = new Set();
 let remoteHome = '', cwd = '', parentDir = '', sep = '/', lsReq = 0;
 
-function setStatus(t) { $('status').textContent = t; }
+const ERR_RE = /error|wrong|fail|refused|stopped|declined|too many|could not|changed|not online|needs https/i;
+function setStatus(t) {
+  $('status').textContent = t;
+  $('status').classList.toggle('err', ERR_RE.test(t));
+  $('liveStatus').textContent = t.startsWith('Connected to') ? '' : t;
+}
 function send(obj) { if (ctrl && ctrl.readyState === 'open') ctrl.send(JSON.stringify(obj)); }
 function active() { return mode === 'h264' ? video : canvas; }
 function fmtSize(n) { if (n < 1024) return n + ' B'; const u = ['KB','MB','GB','TB']; let i = -1; do { n /= 1024; i++; } while (n >= 1024 && i < 3); return n.toFixed(n < 10 ? 1 : 0) + ' ' + u[i]; }
@@ -73,7 +78,7 @@ function ask({ title, text, code, ok, cancel, danger }) {
     m.classList.toggle('danger', !!danger);
     $('mTitle').textContent = title; $('mText').textContent = text;
     $('mFp').hidden = !code; $('mFp').textContent = code || '';
-    $('mOk').textContent = ok; $('mOk').className = danger ? 'danger' : '';
+    $('mOk').textContent = ok; $('mOk').className = danger ? 'danger' : 'primary';
     $('mCancel').textContent = cancel;
     const done = (v) => { m.hidden = true; $('mOk').onclick = $('mCancel').onclick = null; resolve(v); };
     $('mOk').onclick = () => done(true);
@@ -109,7 +114,7 @@ async function onAuth1(m) {
     if (!pinned) {
       const trust = await ask({
         title: 'First connection to ' + s.id,
-        text: 'Check that this fingerprint matches the one the hopdesk agent printed on that computer. Your password is only used after you confirm.',
+        text: 'Check that it matches the fingerprint shown in HopDesk on that computer. Your password is only used after you confirm.',
         code: fp, ok: 'It matches, connect', cancel: 'Cancel',
       });
       if (!trust) return fail('Cancelled.');
@@ -197,6 +202,7 @@ function onCtrl(m) {
       }
       connected = true;
       $('pw').value = '';
+      $('crumbName').textContent = $('id').value.trim();
       setStatus('Connected to ' + $('id').value.trim());
       $('login').hidden = true; $('controls').hidden = false; $('hint').hidden = true;
       surface.focus();
@@ -349,11 +355,10 @@ function onLs(m) {
   $('path').textContent = '\u200E' + cwd + '\u200E'; $('path').title = cwd;
   for (const e of m.entries) {
     const row = document.createElement('div');
-    row.className = 'row';
-    row.innerHTML = '<span></span><span class="name"></span><span class="size"></span>';
-    row.children[0].textContent = e.dir ? '📁' : '📄';
-    row.children[1].textContent = e.name;
-    row.children[2].textContent = e.dir ? '' : fmtSize(e.size);
+    row.className = e.dir ? 'row dir' : 'row';
+    row.innerHTML = (e.dir ? ICON_FOLDER : ICON_FILE) + '<span class="name"></span><span class="size"></span>';
+    row.querySelector('.name').textContent = e.name;
+    row.querySelector('.size').textContent = e.dir ? '' : fmtSize(e.size);
     row.title = e.dir ? 'Open folder' : 'Download to this computer';
     row.onclick = () => e.dir ? ls(joinPath(cwd, e.name)) : download(joinPath(cwd, e.name), e.name);
     list.appendChild(row);
@@ -361,6 +366,9 @@ function onLs(m) {
   if (!m.entries.length) list.innerHTML = '<div class="note">Empty folder</div>';
   if (m.truncated) { const n = document.createElement('div'); n.className = 'note'; n.textContent = 'Only the first items are shown.'; list.appendChild(n); }
 }
+const ICON_FOLDER = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4.2l2 2H19a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>';
+const ICON_FILE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>';
+$('filesClose').onclick = () => { $('files').hidden = true; surface.focus(); };
 $('filesBtn').onclick = () => { const f = $('files'); f.hidden = !f.hidden; if (!f.hidden && !cwd) ls(''); };
 $('up').onclick = () => ls(parentDir || cwd);
 $('home').onclick = () => ls(remoteHome);
@@ -451,6 +459,6 @@ $('pw').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('connect')
 // The cryptography above needs a secure page (HTTPS or localhost).
 if (!window.isSecureContext || !window.crypto || !crypto.subtle) {
   $('connect').disabled = true;
-  $('hintText').textContent = 'Open this page over HTTPS (or on localhost). For Tailscale: tailscale serve --bg 8080';
+  $('hintText').textContent = 'This page has to be opened over HTTPS (or on localhost). Use the https:// address shown in the HopDesk app.';
   setStatus('Needs HTTPS');
 }

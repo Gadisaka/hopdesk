@@ -3,133 +3,266 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
 <title>HopDesk</title>
 <link rel="icon" href="logo.svg">
+<link rel="stylesheet" href="ui.css">
+<script src="theme.js"></script>
 <style>
-  :root { color-scheme: dark; font-family: -apple-system, system-ui, "Segoe UI", sans-serif; font-size: 14px; }
-  * { box-sizing: border-box; }
-  body { margin: 0; background: #111214; color: #e8e8ea; }
-  .wrap { max-width: 760px; margin: 0 auto; padding: 28px 20px 60px; }
-  header { display: flex; align-items: center; gap: 14px; margin-bottom: 22px; }
-  header img { width: 48px; height: 48px; }
-  header h1 { margin: 0; font-size: 22px; }
-  header .ver { color: #777; font-size: 12px; }
-  .pill { margin-left: auto; padding: 6px 12px; border-radius: 999px; background: #26272b; font-weight: 600; font-size: 13px; white-space: nowrap; }
-  .pill.online { background: #123a24; color: #4ade80; }
-  .pill.error, .pill.offline { background: #3b1717; color: #f87171; }
-  .pill.setup, .pill.connecting, .pill.starting { background: #3a2f10; color: #fbbf24; }
-  .detail { color: #f0a0a0; margin: -10px 0 16px; }
-  .card { background: #1a1b1e; border: 1px solid #2a2b30; border-radius: 14px; padding: 18px 20px; margin-bottom: 16px; }
-  .card h2 { margin: 0 0 4px; font-size: 15px; }
-  .card .sub { color: #8b8d94; margin: 0 0 14px; line-height: 1.45; }
-  .row { display: flex; align-items: center; gap: 10px; margin: 10px 0; flex-wrap: wrap; }
-  .row > label:first-child { width: 150px; color: #b8bac1; }
-  input[type=text], input[type=password], select { flex: 1; min-width: 200px; padding: 8px 10px; border-radius: 8px; border: 1px solid #3a3b40; background: #111214; color: #eee; font: inherit; }
-  input.mono, code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
-  button { padding: 8px 14px; border-radius: 8px; border: 0; background: #3b82f6; color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
-  button.secondary { background: #2c2d33; color: #ddd; font-weight: 500; }
-  button:disabled { opacity: .5; cursor: default; }
-  .big { font: 600 20px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .05em; background: #0d0e10; border: 1px solid #2f3036; border-radius: 10px; padding: 12px 14px; text-align: center; user-select: all; }
-  .fp { font: 600 15px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .04em; color: #c9cbd3; }
-  .ok { color: #4ade80; } .bad { color: #f87171; }
-  .perm { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid #26272b; }
-  .perm:first-of-type { border-top: 0; }
-  .perm .name { flex: 1; }
-  .perm .name small { display: block; color: #8b8d94; }
-  .modes { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 8px; }
-  .mode { border: 1px solid #34353b; border-radius: 10px; padding: 12px; cursor: pointer; }
-  .mode.sel { border-color: #3b82f6; background: #16233a; }
-  .mode b { display: block; margin-bottom: 3px; }
-  .mode span { color: #8b8d94; font-size: 13px; }
-  .note { background: #141a24; border: 1px solid #23324a; border-radius: 10px; padding: 12px 14px; color: #b9c6dc; line-height: 1.5; margin: 10px 0; }
-  .warn { background: #2a1d0c; border-color: #4a3412; color: #f5d39b; }
-  .good { background: #0f2419; border-color: #1d4630; color: #a7e8c0; }
-  .note a { color: #8ab4ff; }
-  .note button { margin-left: 8px; }
-  .check { display: flex; gap: 8px; align-items: center; margin: 8px 0; color: #ccc; }
-  .actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 6px; position: sticky; bottom: 0; padding: 12px 0; background: linear-gradient(transparent, #111214 30%); }
-  .msg { flex: 1; align-self: center; color: #f87171; }
-  .msg.good { color: #4ade80; }
-  footer { display: flex; gap: 10px; color: #777; margin-top: 10px; align-items: center; }
-  footer button { background: none; color: #8b8d94; padding: 4px 6px; font-weight: 500; }
-  [hidden] { display: none !important; }
+  body { background: var(--bg-subtle); min-height: 100vh; }
+  [data-theme="dark"] body { background: var(--bg); }
+
+  header { position: sticky; top: 0; z-index: 10; background: var(--bg); border-bottom: 1px solid var(--border); }
+  .bar { max-width: 960px; margin: 0 auto; height: 60px; padding: 0 24px; display: flex; align-items: center; gap: 12px; }
+  .bar .device { font-weight: 500; color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bar .spacer { flex: 1; }
+
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px; border-radius: 999px;
+    font-size: 12.5px; font-weight: 500; background: var(--bg-muted); color: var(--fg-muted);
+  }
+  .pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+  .pill.online { background: var(--green-bg); color: var(--green); }
+  .pill.online::before { box-shadow: 0 0 0 3px color-mix(in srgb, var(--green) 25%, transparent); }
+  .pill.error, .pill.offline { background: var(--red-bg); color: var(--red); }
+  .pill.setup, .pill.connecting, .pill.starting { background: var(--amber-bg); color: var(--amber); }
+
+  main { max-width: 960px; margin: 0 auto; padding: 40px 24px 32px; }
+  .head h1 { margin: 0; font-size: 30px; font-weight: 600; letter-spacing: -0.03em; }
+  .head p { margin: 6px 0 0; color: var(--fg-muted); }
+  .head .ver { color: var(--fg-subtle); font-size: 13px; margin-top: 2px; }
+  #detail { margin-top: 20px; }
+
+  .section { margin-top: 28px; }
+  .card { overflow: hidden; }
+  .card .body { padding: 24px; }
+  .card h2 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
+  .card .sub { margin: 6px 0 20px; color: var(--fg-muted); line-height: 1.55; max-width: 640px; }
+  .card .foot {
+    display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 10px 24px;
+    background: var(--bg-subtle); border-top: 1px solid var(--border); color: var(--fg-muted); font-size: 13px;
+  }
+  [data-theme="dark"] .card .foot { background: #0d0d0d; }
+  .card .foot .grow { flex: 1; }
+
+  /* key/value rows */
+  .kv { border: 1px solid var(--border); border-radius: 8px; }
+  .kv .r { display: flex; align-items: center; gap: 16px; padding: 14px 16px; min-height: 56px; }
+  .kv .r + .r { border-top: 1px solid var(--border); }
+  .kv .k { width: 170px; flex: none; color: var(--fg-muted); font-size: 13.5px; }
+  .kv .k small { display: block; color: var(--fg-subtle); font-size: 12.5px; margin-top: 2px; }
+  .kv .v { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .kv .v input[type=text], .kv .v input[type=password], .kv .v select { flex: 1; min-width: 180px; }
+  .kv .v code { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg); }
+  .fp { font: 600 14px "Geist Mono", ui-monospace, Menlo, monospace; letter-spacing: .05em; }
+
+  /* new password callout */
+  #newPwCard { border-color: var(--blue); box-shadow: 0 0 0 4px var(--ring); }
+  .big {
+    margin-top: 4px; padding: 18px; border-radius: 10px; text-align: center; user-select: all;
+    font: 600 24px "Geist Mono", ui-monospace, Menlo, monospace; letter-spacing: .08em;
+    background: var(--bg-subtle); border: 1px dashed var(--border-strong);
+  }
+
+  /* permissions */
+  .perm { display: flex; align-items: center; gap: 14px; padding: 14px 16px; }
+  .perm + .perm { border-top: 1px solid var(--border); }
+  .perm .ic { width: 36px; height: 36px; border-radius: 8px; border: 1px solid var(--border); display: grid; place-items: center; color: var(--fg-muted); background: var(--bg-subtle); flex: none; }
+  .perm .ic svg { width: 18px; height: 18px; }
+  .perm .name { flex: 1; font-weight: 500; }
+  .perm .name small { display: block; color: var(--fg-muted); font-weight: 400; font-size: 13px; }
+
+  /* connection mode */
+  .modes { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+  .mode {
+    position: relative; padding: 16px 16px 16px 46px; border-radius: 10px; cursor: pointer;
+    border: 1px solid var(--border); background: var(--bg); transition: border-color .15s, box-shadow .15s;
+  }
+  .mode:hover { border-color: var(--border-strong); }
+  .mode::before {
+    content: ""; position: absolute; left: 16px; top: 18px; width: 16px; height: 16px; border-radius: 50%;
+    border: 1px solid var(--border-strong); background: var(--bg);
+  }
+  .mode.sel { border-color: var(--fg); background: var(--bg-subtle); }
+  .mode.sel::before { border-color: var(--fg); background: var(--fg); box-shadow: inset 0 0 0 4px var(--bg); }
+  .mode b { display: block; font-weight: 600; margin-bottom: 2px; }
+  .mode span { color: var(--fg-muted); font-size: 13px; line-height: 1.5; }
+  #tsNote { margin-bottom: 16px; }
+  .note { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 12px 14px; border-radius: 8px; background: var(--bg-subtle); border: 1px solid var(--border); color: var(--fg-muted); font-size: 13.5px; line-height: 1.55; }
+  .note.warn { background: var(--amber-bg); border-color: transparent; color: var(--amber); }
+  .note.good { background: var(--green-bg); border-color: transparent; color: var(--green); }
+  .note a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+  .note button { height: 32px; font-size: 13px; }
+  .note button:not(.secondary) { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+  #tsLinks { margin-bottom: 12px; }
+
+  /* preferences */
+  .pref { display: flex; align-items: center; gap: 16px; padding: 16px 0; }
+  .pref + .pref { border-top: 1px solid var(--border); }
+  .pref .t { flex: 1; }
+  .pref .t b { font-weight: 500; }
+  .pref .t small { display: block; color: var(--fg-muted); font-size: 13px; }
+  .pref select { width: 230px; }
+  .muted { color: var(--fg-muted); }
+
+  /* save bar */
+  .savebar {
+    position: sticky; bottom: 20px; z-index: 20; margin-top: 24px;
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 10px 10px 18px; border-radius: 12px; border: 1px solid var(--border);
+    background: var(--bg); box-shadow: var(--shadow);
+  }
+  .savebar .hint3 { color: var(--fg-muted); font-size: 13px; }
+  #msg { flex: 1; font-size: 13px; color: var(--red); overflow: hidden; text-overflow: ellipsis; }
+  #msg.good { color: var(--green); }
+  #save { height: 36px; }
+
+  footer.meta { display: flex; align-items: center; gap: 4px; margin-top: 28px; color: var(--fg-subtle); font-size: 13px; }
+  footer.meta .grow { flex: 1; }
+  footer.meta button { height: 30px; font-size: 13px; }
+
+  @media (max-width: 700px) {
+    .modes { grid-template-columns: 1fr; }
+    .kv .r { flex-direction: column; align-items: stretch; gap: 8px; }
+    .kv .k { width: auto; }
+    .pref { flex-direction: column; align-items: stretch; }
+    .pref select { width: 100%; }
+    .savebar .hint3 { display: none; }
+  }
 </style>
 </head>
 <body>
-<div class="wrap">
-  <header>
-    <img src="logo.svg" alt="">
-    <div><h1>HopDesk</h1><div class="ver" id="ver"></div></div>
+<header>
+  <div class="bar">
+    <span class="brand">
+      <svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="15" fill="currentColor"/><g fill="none" style="stroke:var(--bg)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><rect x="11" y="21" width="24" height="17" rx="3"/><path d="M20 15c6-6 18-6 24 2M45 11l-1 7-6-2"/></g><rect x="31" y="31" width="22" height="15" rx="3" style="fill:var(--bg)"/></svg>
+      HopDesk
+    </span>
+    <span class="crumb-sep">/</span>
+    <span class="device" id="crumbDevice"></span>
     <span class="pill" id="pill">Loading…</span>
-  </header>
-  <div class="detail" id="detail" hidden></div>
-
-  <div class="card" id="newPwCard" hidden>
-    <h2>This computer's password</h2>
-    <p class="sub">Write it down or put it in your password manager. It's shown only once, because HopDesk keeps only a scrambled version of it.</p>
-    <div class="big" id="newPw"></div>
-    <div class="row" style="justify-content:flex-end"><button id="ackPw">I've saved it</button></div>
-  </div>
-
-  <div class="card">
-    <h2>This computer</h2>
-    <p class="sub">Others connect to it with its name and password, after comparing the fingerprint the first time.</p>
-    <div class="row"><label for="deviceId">Device name</label><input id="deviceId" type="text" maxlength="64" spellcheck="false"></div>
-    <div class="row"><label>Fingerprint</label><span class="fp" id="fp"></span></div>
-    <div class="row"><label>Password</label>
-      <span id="pwState" style="flex:1"></span>
-      <button class="secondary" id="genPw">Generate new</button>
-      <button class="secondary" id="setPwBtn">Choose my own…</button>
+    <span class="spacer"></span>
+    <div class="theme-switch" role="group" aria-label="Theme">
+      <button data-theme-choice="system" title="System theme" aria-label="System theme"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg></button>
+      <button data-theme-choice="light" title="Light theme" aria-label="Light theme"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>
+      <button data-theme-choice="dark" title="Dark theme" aria-label="Dark theme"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg></button>
     </div>
-    <div class="row" id="setPwRow" hidden><label for="ownPw">New password</label><input id="ownPw" type="password" placeholder="10+ characters" autocomplete="new-password"><button id="savePw">Set</button></div>
   </div>
+</header>
 
-  <div class="card" id="permCard" hidden>
-    <h2>macOS permissions</h2>
-    <p class="sub">Required so viewers can see this screen and use the mouse and keyboard. Click Grant, then switch on <b>HopDesk</b> in the window that opens.</p>
-    <div class="perm"><span id="permScreenIcon"></span><div class="name">Screen Recording<small>to share this screen</small></div><button class="secondary" id="grantScreen">Grant</button></div>
-    <div class="perm"><span id="permAxIcon"></span><div class="name">Accessibility<small>to control the mouse and keyboard</small></div><button class="secondary" id="grantAx">Grant</button></div>
-    <div class="note" id="permRestart" hidden>After switching Screen Recording on, macOS needs HopDesk to restart. <button class="secondary" id="restartBtn">Restart HopDesk</button></div>
+<main>
+  <div class="head">
+    <h1>Settings</h1>
+    <p>How this computer accepts remote connections.</p>
+    <div class="ver" id="ver"></div>
   </div>
+  <div class="alert bad" id="detail" hidden></div>
 
-  <div class="card">
-    <h2>Connection</h2>
-    <div class="modes">
-      <div class="mode" data-mode="connect" id="modeConnect"><b>Use a HopDesk server</b><span>Another computer (or a VPS) runs the server.</span></div>
-      <div class="mode" data-mode="host" id="modeHost"><b>This computer is the server</b><span>Your other devices connect here from anywhere. Tailscale is built in.</span></div>
+  <!-- one-time password -->
+  <section class="section card" id="newPwCard" hidden>
+    <div class="body">
+      <h2>Save this computer's password</h2>
+      <p class="sub">Put it in your password manager. It's shown only once, because HopDesk keeps only a one-way hash of it.</p>
+      <div class="big" id="newPw"></div>
     </div>
-    <div id="connectBox">
-      <div class="row"><label for="serverUrl">Server address</label><input id="serverUrl" type="text" class="mono" placeholder="wss://mymac.your-tailnet.ts.net/ws" spellcheck="false"></div>
-      <div class="row"><label for="agentKey">Agent key</label><input id="agentKey" type="password" class="mono" placeholder="from the server's HopDesk window" spellcheck="false" autocomplete="off"></div>
-    </div>
-    <div id="hostBox" hidden>
-      <div class="note" id="tsNote"></div>
-      <div id="tsLinks" hidden>
-        <div class="row"><label>Open from any browser</label><code id="viewerUrl" style="flex:1"></code><button class="secondary" id="copyViewer">Copy</button></div>
-        <div class="row"><label>Other computers' server</label><code id="agentUrl" style="flex:1"></code><button class="secondary" id="copyAgent">Copy</button></div>
+    <div class="foot"><span class="grow">You'll type it in the viewer when you connect to this computer.</span><button id="ackPw" class="primary">I've saved it</button></div>
+  </section>
+
+  <!-- this computer -->
+  <section class="section card">
+    <div class="body">
+      <h2>This computer</h2>
+      <p class="sub">Viewers connect with the device name and password. The first time, they compare the fingerprint, which is how they know it's really this computer.</p>
+      <div class="kv">
+        <div class="r"><div class="k">Device name<small>Letters, numbers, - . _</small></div><div class="v"><input id="deviceId" type="text" maxlength="64" spellcheck="false"></div></div>
+        <div class="r"><div class="k">Fingerprint</div><div class="v"><span class="fp" id="fp"></span></div></div>
+        <div class="r"><div class="k">Password</div><div class="v"><span id="pwState"></span></div></div>
+        <div class="r" id="setPwRow" hidden><div class="k">New password<small>10+ characters</small></div><div class="v"><input id="ownPw" type="password" autocomplete="new-password"><button id="savePw" class="primary">Set password</button></div></div>
       </div>
-      <div class="row"><label for="hostKey">Agent key</label><input id="hostKey" type="password" class="mono" readonly><button class="secondary" id="showKey">Show</button><button class="secondary" id="copyKey">Copy</button><button class="secondary" id="newKey">New key</button></div>
-      <div class="row"><label for="hostListen">Local address</label><input id="hostListen" type="text" class="mono"></div>
-      <div class="row" id="tsSignOutRow" hidden><span style="flex:1;color:#8b8d94">Tailscale account: signed in</span><button class="secondary" id="tsSignOut">Sign out of Tailscale</button></div>
     </div>
-  </div>
+    <div class="foot"><span class="grow">Changing it doesn't disconnect anyone. New connections need the new password.</span><button id="setPwBtn">Choose my own…</button><button id="genPw">Generate new</button></div>
+  </section>
 
-  <div class="card">
-    <h2>Preferences</h2>
-    <div class="row"><label for="quality">Starting quality</label>
-      <select id="quality"><option value="low">Low (1280 px)</option><option value="medium">Medium (1920 px)</option><option value="high">High (2560 px)</option><option value="ultra">Ultra (native resolution)</option></select></div>
-    <div class="row"><label for="fps">Frame rate</label>
-      <select id="fps"><option value="5">5 fps</option><option value="10">10 fps</option><option value="15">15 fps</option><option value="20">20 fps</option><option value="30">30 fps</option><option value="60">60 fps</option></select></div>
-    <div class="row"><label for="clipboard">Clipboard</label>
-      <select id="clipboard"><option value="both">Sync both ways</option><option value="to-remote">Only paste into this computer</option><option value="off">Off</option></select></div>
-    <label class="check"><input type="checkbox" id="confirm"> Ask me to approve each connection on this computer</label>
-    <label class="check" id="autostartRow"><input type="checkbox" id="startAtLogin"> Start HopDesk when I log in</label>
-    <div class="row"><label>Video</label><span id="video" style="color:#8b8d94"></span></div>
-  </div>
+  <!-- permissions (macOS) -->
+  <section class="section card" id="permCard" hidden>
+    <div class="body">
+      <h2>macOS permissions</h2>
+      <p class="sub">Needed so viewers can see this screen and use the mouse and keyboard. Click Grant, then switch on <b>HopDesk</b> in the window that opens.</p>
+      <div class="kv">
+        <div class="perm">
+          <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg></span>
+          <div class="name">Screen Recording<small>Share this screen</small></div>
+          <span id="permScreenIcon"></span><button id="grantScreen">Grant</button>
+        </div>
+        <div class="perm">
+          <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3l14 9-6 1.5L10 20z"/></svg></span>
+          <div class="name">Accessibility<small>Control the mouse and keyboard</small></div>
+          <span id="permAxIcon"></span><button id="grantAx">Grant</button>
+        </div>
+      </div>
+    </div>
+    <div class="foot" id="permRestart" hidden><span class="grow">After switching on Screen Recording, macOS needs HopDesk to restart.</span><button id="restartBtn">Restart HopDesk</button></div>
+  </section>
 
-  <div class="actions"><span class="msg" id="msg"></span><button id="save">Save and restart</button></div>
-  <footer><span id="sessions"></span><span style="flex:1"></span><button id="openLog">Open log</button><button id="quit">Quit HopDesk</button></footer>
-</div>
+  <!-- connection -->
+  <section class="section card">
+    <div class="body">
+      <h2>Connection</h2>
+      <p class="sub">Where viewers and your other computers find this one.</p>
+      <div class="modes">
+        <div class="mode" data-mode="connect" id="modeConnect"><b>Use a HopDesk server</b><span>Another computer, or a VPS, runs the server.</span></div>
+        <div class="mode" data-mode="host" id="modeHost"><b>This computer is the server</b><span>Reachable from anywhere. Tailscale is built in.</span></div>
+      </div>
+      <div id="connectBox">
+        <div class="kv">
+          <div class="r"><div class="k">Server address</div><div class="v"><input id="serverUrl" type="text" class="mono" placeholder="wss://hopdesk-mymac.tailnet.ts.net/ws" spellcheck="false"></div></div>
+          <div class="r"><div class="k">Agent key<small>From the server's HopDesk</small></div><div class="v"><input id="agentKey" type="password" class="mono" spellcheck="false" autocomplete="off"></div></div>
+        </div>
+      </div>
+      <div id="hostBox" hidden>
+        <div class="note" id="tsNote"></div>
+        <div class="kv" id="tsLinks" hidden>
+          <div class="r"><div class="k">Open in any browser</div><div class="v"><code id="viewerUrl"></code><button id="copyViewer" class="sm">Copy</button></div></div>
+          <div class="r"><div class="k">Other computers' server</div><div class="v"><code id="agentUrl"></code><button id="copyAgent" class="sm">Copy</button></div></div>
+        </div>
+        <div class="kv">
+          <div class="r"><div class="k">Agent key<small>Give it to your other computers</small></div><div class="v"><input id="hostKey" type="password" class="mono" readonly><button id="showKey" class="sm">Show</button><button id="copyKey" class="sm">Copy</button><button id="newKey" class="sm">New</button></div></div>
+          <div class="r"><div class="k">Local address</div><div class="v"><input id="hostListen" type="text" class="mono"></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="foot" id="tsSignOutRow" hidden><span class="grow">Signed in to Tailscale.</span><button id="tsSignOut">Sign out of Tailscale</button></div>
+  </section>
+
+  <!-- preferences -->
+  <section class="section card">
+    <div class="body">
+      <h2>Preferences</h2>
+      <div class="pref"><div class="t"><b>Starting quality</b><small>Viewers can change it while connected.</small></div>
+        <select id="quality"><option value="low">Low (1280 px)</option><option value="medium">Medium (1920 px)</option><option value="high">High (2560 px)</option><option value="ultra">Ultra (native resolution)</option></select></div>
+      <div class="pref"><div class="t"><b>Frame rate</b><small>Higher is smoother but uses more bandwidth.</small></div>
+        <select id="fps"><option value="5">5 fps</option><option value="10">10 fps</option><option value="15">15 fps</option><option value="20">20 fps</option><option value="30">30 fps</option><option value="60">60 fps</option></select></div>
+      <div class="pref"><div class="t"><b>Clipboard</b><small>Copied text between this computer and viewers.</small></div>
+        <select id="clipboard"><option value="both">Sync both ways</option><option value="to-remote">Only paste into this computer</option><option value="off">Off</option></select></div>
+      <label class="pref"><div class="t"><b>Approve each connection</b><small>Someone at this computer must click Allow first.</small></div><input type="checkbox" class="switch" id="confirm"></label>
+      <label class="pref" id="autostartRow"><div class="t"><b>Start at login</b><small>So you can reach this computer after a restart.</small></div><input type="checkbox" class="switch" id="startAtLogin"></label>
+      <div class="pref"><div class="t"><b>Video engine</b><small id="video"></small></div></div>
+    </div>
+  </section>
+
+  <footer class="meta">
+    <span id="sessions" class="grow"></span>
+    <button id="openLog" class="ghost">Open log</button>
+    <button id="quit" class="ghost danger-ghost">Quit HopDesk</button>
+  </footer>
+
+  <div class="savebar">
+    <span class="hint3">Changes apply after HopDesk restarts.</span>
+    <span id="msg"></span>
+    <button id="save" class="primary">Save and restart</button>
+  </div>
+</main>
+
 <script src="app.js"></script>
 </body>
 </html>

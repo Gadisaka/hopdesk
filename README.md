@@ -30,8 +30,12 @@
 hopdesk is a personal alternative to RustDesk, TeamViewer and AnyDesk. Install the HopDesk app on the computers you want to reach (one of them can be the server), then connect from any browser. There are no accounts and no third-party cloud, and the screen goes straight from one computer to the other.
 
 <p align="center">
-  <a href="docs/images/session.png"><img src="docs/images/session.png" alt="A hopdesk session in the browser" width="860"></a>
+  <picture>
+    <source media="(prefers-color-scheme: light)" srcset="docs/images/session-light.png">
+    <img src="docs/images/session.png" alt="A hopdesk session in the browser" width="860">
+  </picture>
 </p>
+<p align="center"><sub>Light and dark themes. Follows your system, or pick one in the top-right corner.</sub></p>
 
 ## Features
 
@@ -73,8 +77,14 @@ The app opens its **setup page** in your browser:
 Then open the viewer address in a browser on any of your devices, and enter the computer's name and password.
 
 <p align="center">
-  <a href="docs/images/app-setup.png"><img src="docs/images/app-setup.png" alt="HopDesk setup page: password, fingerprint, macOS permissions" width="420"></a>
-  <a href="docs/images/app-host.png"><img src="docs/images/app-host.png" alt="HopDesk setup page as the server, with Tailscale" width="420"></a>
+  <picture>
+    <source media="(prefers-color-scheme: light)" srcset="docs/images/app-setup-light.png">
+    <img src="docs/images/app-setup.png" alt="HopDesk settings page: password, fingerprint, macOS permissions" width="420">
+  </picture>
+  <picture>
+    <source media="(prefers-color-scheme: light)" srcset="docs/images/app-host-light.png">
+    <img src="docs/images/app-host.png" alt="HopDesk settings page as the server, with Tailscale" width="420">
+  </picture>
 </p>
 
 **The server computer, step by step:** sign in once, switch on HTTPS if Tailscale asks (the page links straight to the right admin page), and then it's reachable from anywhere.

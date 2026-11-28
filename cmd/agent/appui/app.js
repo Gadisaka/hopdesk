@@ -33,7 +33,8 @@ function render(s) {
   $('pill').className = 'pill ' + s.state;
   $('detail').hidden = !s.detail; $('detail').textContent = s.detail || '';
   $('fp').textContent = s.fingerprint || '—';
-  $('pwState').innerHTML = s.passwordSet ? '<span class="ok">✓ Set</span>' : '<span class="bad">Not set</span>';
+  $('pwState').innerHTML = s.passwordSet ? '<span class="badge ok">Set</span>' : '<span class="badge bad">Not set</span>';
+  $('crumbDevice').textContent = s.config.deviceId;
   $('newPwCard').hidden = !s.newPassword;
   $('newPw').textContent = s.newPassword || '';
   $('video').textContent = s.video;
@@ -42,7 +43,7 @@ function render(s) {
 
   $('permCard').hidden = !s.perms.supported;
   if (s.perms.supported) {
-    const icon = (ok) => ok ? '<span class="ok">✓</span>' : '<span class="bad">✕</span>';
+    const icon = (ok) => ok ? '<span class="badge ok">Allowed</span>' : '<span class="badge bad">Off</span>';
     $('permScreenIcon').innerHTML = icon(s.perms.screen);
     $('permAxIcon').innerHTML = icon(s.perms.accessibility);
     $('grantScreen').hidden = s.perms.screen;

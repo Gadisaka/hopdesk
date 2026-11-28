@@ -1,0 +1,237 @@
+/* hopdesk design system: shared by the viewer and the desktop app's setup page.
+   Neutral, high-contrast, thin borders; light and dark themes. */
+
+:root,
+[data-theme="light"] {
+  color-scheme: light;
+  --bg: #ffffff;
+  --bg-subtle: #fafafa;
+  --bg-muted: #f2f2f2;
+  --bg-hover: #f5f5f5;
+  --stage: #f4f4f5;
+  --border: #ebebeb;
+  --border-strong: #d6d6d6;
+  --fg: #171717;
+  --fg-muted: #5f5f5f;
+  --fg-subtle: #8f8f8f;
+  --accent: #171717;
+  --accent-fg: #ffffff;
+  --accent-hover: #383838;
+  --blue: #0068d6;
+  --blue-bg: #ebf5ff;
+  --green: #107d32;
+  --green-bg: #ebfaef;
+  --red: #d8262c;
+  --red-bg: #fff0f0;
+  --amber: #a35200;
+  --amber-bg: #fff6e5;
+  --ring: rgba(0, 104, 214, 0.28);
+  --dots: rgba(0, 0, 0, 0.09);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px -6px rgba(0, 0, 0, 0.10);
+  --shadow-lg: 0 2px 4px rgba(0, 0, 0, 0.04), 0 24px 64px -12px rgba(0, 0, 0, 0.22);
+  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%235f5f5f' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m4.5 6.5 3.5 3.5 3.5-3.5'/%3E%3C/svg%3E");
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0a0a0a;
+  --bg-subtle: #101010;
+  --bg-muted: #1a1a1a;
+  --bg-hover: #161616;
+  --stage: #000000;
+  --border: #232323;
+  --border-strong: #333333;
+  --fg: #ededed;
+  --fg-muted: #a1a1a1;
+  --fg-subtle: #707070;
+  --accent: #ededed;
+  --accent-fg: #0a0a0a;
+  --accent-hover: #cfcfcf;
+  --blue: #52a8ff;
+  --blue-bg: #0d1a2b;
+  --green: #3fc677;
+  --green-bg: #0d1f14;
+  --red: #ff6166;
+  --red-bg: #2a1012;
+  --amber: #f5b14a;
+  --amber-bg: #261a08;
+  --ring: rgba(82, 168, 255, 0.35);
+  --dots: rgba(255, 255, 255, 0.07);
+  --shadow-sm: 0 0 0 1px rgba(255, 255, 255, 0.02);
+  --shadow: 0 0 0 1px rgba(255, 255, 255, 0.03), 0 8px 24px -6px rgba(0, 0, 0, 0.7);
+  --shadow-lg: 0 0 0 1px rgba(255, 255, 255, 0.04), 0 24px 64px -12px rgba(0, 0, 0, 0.85);
+  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%23a1a1a1' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m4.5 6.5 3.5 3.5 3.5-3.5'/%3E%3C/svg%3E");
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 14px/1.5 "Geist", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: "cv11", "ss01";
+}
+code, kbd, .mono {
+  font-family: "Geist Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.92em;
+}
+[hidden] { display: none !important; }
+a { color: var(--blue); text-decoration: none; }
+a:hover { text-decoration: underline; }
+::selection { background: var(--blue); color: #fff; }
+
+/* ---- buttons ---- */
+.btn, button {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  height: 36px; padding: 0 14px;
+  border-radius: 6px; border: 1px solid var(--border-strong);
+  background: var(--bg); color: var(--fg);
+  font: inherit; font-weight: 500; font-size: 14px; white-space: nowrap;
+  cursor: pointer; user-select: none;
+  transition: background .15s, border-color .15s, color .15s, box-shadow .15s;
+}
+button:hover:not(:disabled) { background: var(--bg-hover); border-color: var(--fg-subtle); }
+button:focus-visible, input:focus-visible, select:focus-visible, [tabindex]:focus-visible {
+  outline: none; box-shadow: 0 0 0 1px var(--border-strong), 0 0 0 4px var(--ring);
+}
+button:disabled { opacity: .45; cursor: not-allowed; }
+button svg { width: 16px; height: 16px; flex: none; }
+.btn-primary, button.primary {
+  background: var(--accent); color: var(--accent-fg); border-color: var(--accent);
+}
+.btn-primary:hover:not(:disabled), button.primary:hover:not(:disabled) {
+  background: var(--accent-hover); border-color: var(--accent-hover);
+}
+button.ghost { background: transparent; border-color: transparent; color: var(--fg-muted); }
+button.ghost:hover:not(:disabled) { background: var(--bg-hover); color: var(--fg); border-color: transparent; }
+button.danger { background: var(--red); border-color: var(--red); color: #fff; }
+button.danger:hover:not(:disabled) { background: var(--red); border-color: var(--red); filter: brightness(1.08); }
+button.danger-ghost { color: var(--red); }
+button.sm { height: 32px; padding: 0 10px; font-size: 13px; }
+button.icon { width: 32px; height: 32px; padding: 0; }
+
+/* ---- inputs ---- */
+input[type=text], input[type=password], input[type=email], select {
+  height: 36px; padding: 0 12px; min-width: 0;
+  border-radius: 6px; border: 1px solid var(--border-strong);
+  background: var(--bg); color: var(--fg);
+  font: inherit; font-size: 14px;
+  transition: border-color .15s, box-shadow .15s;
+}
+input::placeholder { color: var(--fg-subtle); }
+input:hover, select:hover { border-color: var(--fg-subtle); }
+input[readonly] { background: var(--bg-subtle); color: var(--fg-muted); }
+select {
+  appearance: none; -webkit-appearance: none;
+  padding-right: 32px; cursor: pointer;
+  background: var(--bg) var(--chevron) no-repeat right 8px center;
+}
+select.sm { height: 32px; font-size: 13px; padding-left: 10px; }
+label.field { display: grid; gap: 6px; font-size: 13px; color: var(--fg-muted); font-weight: 500; }
+
+/* switch: <input type=checkbox class=switch> */
+input.switch {
+  appearance: none; -webkit-appearance: none; flex: none;
+  width: 32px; height: 18px; margin: 0; border-radius: 999px;
+  background: var(--border-strong); position: relative; cursor: pointer;
+  transition: background .2s;
+}
+input.switch::after {
+  content: ""; position: absolute; top: 2px; left: 2px;
+  width: 14px; height: 14px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, .25);
+  transition: transform .2s;
+}
+input.switch:checked { background: var(--accent); }
+input.switch:checked::after { transform: translateX(14px); background: var(--accent-fg); }
+
+/* ---- badges ---- */
+.badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 22px; padding: 0 8px; border-radius: 999px;
+  font-size: 12px; font-weight: 500; white-space: nowrap;
+  background: var(--bg-muted); color: var(--fg-muted); border: 1px solid var(--border);
+}
+.badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.badge.plain::before { display: none; }
+.badge.ok { background: var(--green-bg); color: var(--green); border-color: transparent; }
+.badge.bad { background: var(--red-bg); color: var(--red); border-color: transparent; }
+.badge.warn { background: var(--amber-bg); color: var(--amber); border-color: transparent; }
+.badge.info { background: var(--blue-bg); color: var(--blue); border-color: transparent; }
+
+/* ---- theme switcher ---- */
+.theme-switch {
+  display: inline-flex; padding: 2px; gap: 2px;
+  border: 1px solid var(--border); border-radius: 999px; background: var(--bg);
+}
+.theme-switch button {
+  width: 28px; height: 28px; padding: 0; border: 0; border-radius: 999px;
+  background: transparent; color: var(--fg-subtle);
+}
+.theme-switch button svg { width: 15px; height: 15px; }
+.theme-switch button:hover:not(:disabled) { background: transparent; color: var(--fg); }
+.theme-switch button[aria-pressed="true"] { background: var(--bg-muted); color: var(--fg); box-shadow: var(--shadow-sm); }
+
+/* ---- brand ---- */
+.brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 600; letter-spacing: -0.01em; color: var(--fg); }
+.brand svg { width: 24px; height: 24px; }
+.crumb-sep { color: var(--border-strong); font-size: 20px; font-weight: 300; margin: 0 2px; }
+
+/* ---- cards, alerts ---- */
+.card { background: var(--bg); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-sm); }
+.alert {
+  display: flex; gap: 10px; align-items: flex-start;
+  padding: 12px 14px; border-radius: 8px; border: 1px solid var(--border);
+  background: var(--bg-subtle); color: var(--fg-muted); font-size: 13.5px; line-height: 1.55;
+}
+.alert svg { width: 16px; height: 16px; flex: none; margin-top: 2px; }
+.alert.info { background: var(--blue-bg); border-color: transparent; color: var(--blue); }
+.alert.good { background: var(--green-bg); border-color: transparent; color: var(--green); }
+.alert.warn { background: var(--amber-bg); border-color: transparent; color: var(--amber); }
+.alert.bad { background: var(--red-bg); border-color: transparent; color: var(--red); }
+.alert a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+
+/* ---- dialog ---- */
+.overlay {
+  position: fixed; inset: 0; z-index: 50;
+  display: flex; align-items: center; justify-content: center; padding: 20px;
+  background: rgba(0, 0, 0, .45); backdrop-filter: blur(2px);
+  animation: fade .15s ease-out;
+}
+.dialog {
+  width: min(520px, 100%); overflow: hidden;
+  background: var(--bg); border: 1px solid var(--border); border-radius: 12px;
+  box-shadow: var(--shadow-lg); animation: pop .18s ease-out;
+}
+.dialog .body { padding: 24px; }
+.dialog h2 { margin: 0 0 8px; font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
+.dialog p { margin: 0; color: var(--fg-muted); white-space: pre-line; line-height: 1.6; }
+.dialog .fp {
+  display: block; margin: 16px 0 0; padding: 12px;
+  font-size: 16px; font-weight: 600; letter-spacing: .06em; text-align: center;
+  background: var(--bg-subtle); border: 1px solid var(--border); border-radius: 8px; color: var(--fg);
+}
+.dialog .btns {
+  display: flex; justify-content: flex-end; gap: 8px;
+  padding: 14px 24px; background: var(--bg-subtle); border-top: 1px solid var(--border);
+}
+.overlay.danger h2 { color: var(--red); }
+
+/* ---- toast ---- */
+.toast {
+  position: fixed; right: 20px; bottom: 20px; z-index: 60; max-width: min(420px, calc(100vw - 40px));
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 12px 12px 16px; border-radius: 10px;
+  background: var(--bg); border: 1px solid var(--border); box-shadow: var(--shadow);
+  font-size: 13.5px; animation: slide .2s ease-out;
+}
+.toast span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+@keyframes fade { from { opacity: 0; } }
+@keyframes pop { from { opacity: 0; transform: translateY(6px) scale(.98); } }
+@keyframes slide { from { opacity: 0; transform: translateY(8px); } }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
