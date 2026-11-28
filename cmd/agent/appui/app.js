@@ -39,6 +39,7 @@ function render(s) {
   $('newPwCard').hidden = !s.newPassword;
   $('newPw').textContent = s.newPassword || '';
   $('video').textContent = s.video;
+  $('soundInfo').textContent = 'Sound: ' + (s.sound || 'Off');
   $('sessions').textContent = s.sessions ? s.sessions + ' viewer(s) connected now' : '';
   $('autostartRow').hidden = !s.autostartSupported;
 
@@ -63,6 +64,7 @@ function render(s) {
     $('hostListen').value = c.hostListen;
     $('quality').value = c.quality; $('fps').value = String(c.fps); $('clipboard').value = c.clipboard;
     $('confirm').checked = c.confirm; $('startAtLogin').checked = c.startAtLogin;
+    $('sound').checked = !c.noSound;
     setMode(c.mode || 'connect');
     firstLoad = false;
   }
@@ -262,7 +264,7 @@ $('save').onclick = async () => {
     agentKey: mode === 'connect' ? $('agentKey').value : $('hostKey').value,
     hostListen: $('hostListen').value,
     quality: $('quality').value, fps: +$('fps').value, clipboard: $('clipboard').value,
-    confirm: $('confirm').checked, startAtLogin: $('startAtLogin').checked,
+    confirm: $('confirm').checked, startAtLogin: $('startAtLogin').checked, noSound: !$('sound').checked,
   };
   $('save').disabled = true;
   try {

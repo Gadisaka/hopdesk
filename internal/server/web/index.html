@@ -151,6 +151,14 @@
   .xfer.err .msg, .xfer.err .pct { color: var(--red); }
 
   #moreBtn { display: none; }
+  #soundBtn .s-on { display: none; }
+  #soundBtn[aria-pressed="true"] .s-on { display: block; }
+  #soundBtn[aria-pressed="true"] .s-off { display: none; }
+  #soundBtn[aria-pressed="true"] { color: var(--blue); border-color: color-mix(in srgb, var(--blue) 40%, var(--border)); }
+  .volume { display: inline-flex; align-items: center; gap: 6px; color: var(--fg-muted); font-size: 13px; }
+  .volume svg { width: 16px; height: 16px; flex: none; }
+  .volume input { width: 84px; accent-color: var(--fg); }
+  .volume[hidden] { display: none; }
   .opts { display: contents; }
 
   /* phones and tablets */
@@ -216,6 +224,8 @@
     }
     #controls.open .opts select { width: 100%; height: 40px; }
     #controls.open .opts .toggle { justify-content: space-between; flex-direction: row-reverse; height: 36px; }
+    #controls.open .opts .volume { height: 36px; }
+    #controls.open .opts .volume input { flex: 1; width: auto; }
     #controls.open .opts .label-hide { display: inline; }
     aside { position: fixed; inset: 60px 0 0 0; width: auto; z-index: 30; border-left: 0; }
   }
@@ -247,9 +257,11 @@
       <option value="5">5 fps</option><option value="10">10 fps</option><option value="15">15 fps</option>
       <option value="20">20 fps</option><option value="30">30 fps</option><option value="60">60 fps</option>
     </select>
+    <label class="volume" id="volumeRow" title="Volume" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 4V5L8 9z"/></svg><input id="volume" type="range" min="0" max="100" value="100" aria-label="Volume"><span class="label-hide">Volume</span></label>
     <label class="toggle" title="Send Ctrl when you press Cmd (for a Mac controlling a Windows PC)"><input id="swap" type="checkbox" class="switch"><span class="label-hide">Cmd → Ctrl</span></label>
     </div>
     <span class="divider"></span>
+    <button id="soundBtn" class="sm icon" title="Turn sound on" aria-label="Turn sound on" aria-pressed="false" hidden><svg class="s-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M17 9.5l5 5M22 9.5l-5 5"/></svg><svg class="s-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19.3 5.7a9 9 0 0 1 0 12.6"/></svg></button>
     <button id="filesBtn" class="sm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span class="label-hide">Files</span></button>
     <button id="disconnect" class="sm danger-ghost"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v8M6.3 6.8a8 8 0 1 0 11.4 0"/></svg><span class="label-hide">Disconnect</span></button>
     <span class="divider"></span>
@@ -265,6 +277,7 @@
 <div class="wrap">
   <div id="surface" tabindex="0">
     <video id="video" autoplay muted playsinline hidden></video>
+    <audio id="audio" autoplay playsinline muted></audio>
     <canvas id="canvas" width="1280" height="720" hidden></canvas>
     <svg id="tcursor" viewBox="0 0 24 24" aria-hidden="true" hidden><path d="M1 1l0 18.5 5.2-5 3.3 7.6 3.4-1.5-3.3-7.4 7.2-.2z"/></svg>
     <div id="touchbar" class="touchbar" hidden>

@@ -384,6 +384,7 @@ type uiState struct {
 	SetupDone   bool      `json:"setupDone"`
 	Config      appConfig `json:"config"`
 	Video       string    `json:"video"`
+	Sound       string    `json:"sound"`
 	Perms       struct {
 		Supported     bool `json:"supported"`
 		Screen        bool `json:"screen"`
@@ -414,6 +415,7 @@ func buildState() uiState {
 	if *codecFlag != "jpeg" && h264Encoder() != "" {
 		st.Video = "H.264 (" + h264Encoder() + ")"
 	}
+	st.Sound = audioDescription()
 	st.Perms.Supported = permSupported()
 	if st.Perms.Supported {
 		st.Perms.Screen, st.Perms.Accessibility = permScreen(), permAccessibility()

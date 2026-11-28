@@ -1,6 +1,6 @@
 # Limitations
 
-- **Audio:** none.
+- **Sound:** one way, from the remote computer to you (no microphone). It needs ffmpeg with an Opus encoder (Homebrew's ffmpeg and the bundled Windows build have one), and macOS 13 or later. On Windows it plays whatever the default output device plays.
 - **Clipboard:** text only, up to about 60 KB. Text copied on the remote shows up with a **Copy here** button and never replaces your clipboard on its own, because a compromised remote could otherwise swap in a malicious command for you to paste.
 - **Downloads:** held in browser memory until complete, so multi-GB files may fail. Uploads stream to disk.
 - **Keyboard:** uses a US-layout physical key map, with other characters typed directly. The browser keeps a few shortcuts for itself (Cmd+W, Cmd+Q, Cmd+Tab).

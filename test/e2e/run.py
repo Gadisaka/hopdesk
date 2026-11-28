@@ -198,6 +198,29 @@ try:
         agent.wait_for_function("window.__settings && window.__settings.fps === 60", timeout=5000)
         check("Ultra quality and 60 fps reach the agent", agent.evaluate("window.__settings")["quality"] == "ultra")
         v.select_option("#quality", "high"); v.select_option("#fps", "30")
+
+        # sound: off until you turn it on; the computer only captures while you listen
+        check("sound starts off, with a speaker button", v.locator("#soundBtn").is_visible()
+              and v.get_attribute("#soundBtn", "aria-pressed") == "false" and v.evaluate("audio.muted"))
+        check("…and the computer isn't sending sound", agent.evaluate("window.__audioOn") is False)
+        v.click("#soundBtn")
+        agent.wait_for_function("window.__audioOn === true", timeout=5000)
+        check("the speaker button asks the computer for sound", v.get_attribute("#soundBtn", "aria-pressed") == "true")
+        level = v.evaluate("""() => new Promise((done) => {
+            const ac = new AudioContext(), an = ac.createAnalyser();
+            ac.createMediaStreamSource(audio.srcObject).connect(an);
+            const buf = new Float32Array(an.fftSize); let best = 0, n = 0;
+            const t = setInterval(() => { an.getFloatTimeDomainData(buf);
+              for (const x of buf) best = Math.max(best, Math.abs(x));
+              if (++n > 30 || best > 0.05) { clearInterval(t); ac.close(); done(best); } }, 100);
+        })""")
+        check("the computer's sound plays in the browser", level > 0.05, f"peak {level:.2f}")
+        v.fill("#volume", "40")
+        check("volume slider sets the level", abs(v.evaluate("audio.volume") - 0.4) < 0.01)
+        v.screenshot(path=f"{OUT}/sound-on.png", clip={"x": 0, "y": 0, "width": 1440, "height": 110})
+        v.click("#soundBtn")
+        agent.wait_for_function("window.__audioOn === false", timeout=5000)
+        check("turning sound off stops it on the computer too", v.evaluate("audio.muted"))
         v.click("#filesBtn")
         v.locator("#list .row", has_text="Downloads").click()
         expect(v.locator("#path")).to_have_attribute("title", "/Users/demo/Downloads", timeout=5000)

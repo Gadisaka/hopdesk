@@ -117,12 +117,26 @@ function waitIce(pc) {
     pc.addEventListener('icegatheringstatechange', () => pc.iceGatheringState === 'complete' && res()); setTimeout(res, 3000); });
 }
 
+// "System sound": a steady 440 Hz tone.
+let tone = null;
+function toneTrack() {
+  if (!tone) {
+    const ac = new AudioContext();
+    const osc = ac.createOscillator(), gain = ac.createGain(), dest = ac.createMediaStreamDestination();
+    osc.frequency.value = 440; gain.gain.value = 0.3;
+    osc.connect(gain).connect(dest); osc.start();
+    tone = dest.stream.getAudioTracks()[0];
+  }
+  return tone;
+}
+window.__audioOn = false;
+
 let failures = 0;
 async function answerOffer(offerSdp, ice) {
   const pc = new RTCPeerConnection({ iceServers: ice });
-  let authed = false, ctrl = null, tr = null, settings = { display: 0, quality: 'high', fps: 30 };
+  let authed = false, ctrl = null, tr = null, atr = null, settings = { display: 0, quality: 'high', fps: 30 };
   const sendCtrl = (o) => ctrl && ctrl.readyState === 'open' && ctrl.send(JSON.stringify(o));
-  const hello = () => sendCtrl({ t: 'hello', mode: 'h264', displays: [{ w: 2560, h: 1600 }, { w: 1920, h: 1080 }], settings, home: '/Users/demo', os: 'darwin', id: ID });
+  const hello = () => sendCtrl({ t: 'hello', mode: 'h264', displays: [{ w: 2560, h: 1600 }, { w: 1920, h: 1080 }], settings, home: '/Users/demo', os: 'darwin', id: ID, audio: !!atr });
 
   pc.ondatachannel = ({ channel: dc }) => {
     if (dc.label === 'input') {
@@ -162,6 +176,10 @@ async function answerOffer(offerSdp, ice) {
         if (m.t === 'key' && m.down && m.key === 'Backspace') typed = typed.slice(0, -1);
         if (m.t === 'settings') { settings = { display: m.display, quality: m.quality, fps: m.fps }; display = m.display; window.__settings = settings; hello(); }
         if (m.t === 'clip') window.__clip = m.text;
+        if (m.t === 'audio' && atr) { // like the Go agent: sound only while the viewer wants it
+          window.__audioOn = m.on;
+          atr.sender.replaceTrack(m.on ? toneTrack() : null);
+        }
         if (m.t === 'ls') {
           const p = m.path || '/Users/demo';
           const list = FS[p];
@@ -206,6 +224,8 @@ async function answerOffer(offerSdp, ice) {
   await pc.setRemoteDescription({ type: 'offer', sdp: offerSdp });
   tr = pc.getTransceivers().find((t) => t.receiver.track.kind === 'video') || null;
   if (tr) tr.direction = 'sendonly';
+  atr = pc.getTransceivers().find((t) => t.receiver.track.kind === 'audio') || null;
+  if (atr) atr.direction = 'sendonly';
   await pc.setLocalDescription(await pc.createAnswer());
   await waitIce(pc);
   return pc.localDescription.sdp;

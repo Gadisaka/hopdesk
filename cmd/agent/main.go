@@ -123,8 +123,9 @@ type session struct {
 	ctx      context.Context
 	cancel   context.CancelFunc
 	track    *webrtc.TrackLocalStaticRTP
-	h264High bool     // viewer's browser decodes H.264 High profile
-	rtp      rtpState // only touched by the single running H.264 forwarder
+	audio    *webrtc.TrackLocalStaticRTP // set when the viewer can receive sound
+	h264High bool                        // viewer's browser decodes H.264 High profile
+	rtp      rtpState                    // only touched by the single running H.264 forwarder
 
 	closeOnce  sync.Once
 	lastActive atomic.Int64
@@ -197,7 +198,7 @@ func (s *session) sendHello() {
 	home, _ := os.UserHomeDir()
 	s.sendCtrl(map[string]any{
 		"t": "hello", "mode": s.getMode(), "displays": ds, "settings": set,
-		"home": home, "os": runtime.GOOS, "id": *agentID, "clipboard": *clipMode,
+		"home": home, "os": runtime.GOOS, "id": *agentID, "clipboard": *clipMode, "audio": s.audio != nil,
 	})
 }
 
@@ -233,6 +234,7 @@ func (s *session) fallbackToJPEG() {
 
 func (s *session) close() {
 	s.closeOnce.Do(func() {
+		sound.listen(s, false)
 		s.cancel()
 		_ = s.pc.Close()
 		authed := s.isAuthed()
@@ -257,6 +259,7 @@ type ctrlMsg struct {
 	Code    string  `json:"code"`
 	Key     string  `json:"key"`
 	Down    bool    `json:"down"`
+	On      bool    `json:"on"`
 	Text    string  `json:"text"`
 	Path    string  `json:"path"`
 	Req     int     `json:"req"`
@@ -301,6 +304,8 @@ func (s *session) handleCtrl(m ctrlMsg) {
 		setClipboard(s, m.Text)
 	case "ls":
 		go listDir(s, m.Path, m.Req)
+	case "audio":
+		sound.listen(s, m.On)
 	}
 }
 
@@ -576,6 +581,8 @@ func handleOffer(sig *sigConn, ice []webrtc.ICEServer, m proto.Msg) {
 			}
 		}
 	}
+
+	addAudioTrack(s, pc, m.SDP)
 
 	answer, err := pc.CreateAnswer(nil)
 	if err != nil {

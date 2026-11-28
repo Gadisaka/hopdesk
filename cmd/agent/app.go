@@ -35,6 +35,7 @@ type appConfig struct {
 	Quality      string `json:"quality"`
 	FPS          int    `json:"fps"`
 	StartAtLogin bool   `json:"startAtLogin"`
+	NoSound      bool   `json:"noSound,omitempty"` // viewers can't hear this computer
 }
 
 var (
@@ -239,6 +240,7 @@ func runApp(restarted bool) {
 func startServices(c appConfig) {
 	*agentID, *agentKey = c.DeviceID, c.AgentKey
 	*confirmFlag, *clipMode = c.Confirm, c.Clipboard
+	*audioFlag = !c.NoSound
 	*defQuality, *defFPS = c.Quality, c.FPS
 	*serverURL = c.ServerURL
 

@@ -4,7 +4,7 @@
 go test ./...                                   # auth, lockouts, URL policy, file names, identity file, settings-page security
 go build -o hopdesk-server ./cmd/server
 pip install playwright && playwright install chromium
-python3 test/e2e/run.py                         # 66 end-to-end checks, including attacks
+python3 test/e2e/run.py                         # 72 end-to-end checks, including attacks
 python3 test/e2e/crosscheck.py                  # Go and the browser agree on the crypto
 ```
 

@@ -57,6 +57,7 @@ HopDesk is a remote desktop you run yourself, an open alternative to TeamViewer,
 | **Full control** | Mouse, keyboard and shortcuts, multiple monitors, and Cmd → Ctrl mapping for Mac-to-Windows. |
 | **Your devices, one tap away** | The viewer lists the computers you use, with live online status. Your password manager fills in passwords, and you can add HopDesk to your phone's home screen like an app. |
 | **Works on your phone** | Touchpad or direct touch, two-finger scroll and right-click, pinch to zoom, a Rotate button for a bigger, sideways picture, and a keyboard with Esc, Tab, Ctrl, Alt, Cmd and the arrows. |
+| **Sound** | Hear the remote computer: music, videos and alerts, in Opus at low delay. Off until you tap the speaker, and only captured while someone is listening. |
 | **Clipboard and files** | Copy and paste in both directions. Drop files on the screen to send them, or browse the remote computer and download. |
 | **Secure by design** | WebRTC encryption, a per-device identity key the viewer remembers (like SSH), and a password that's never sent anywhere. [Threat model →](SECURITY.md) |
 | **Friendly for everyone** | A built-in plain-language guide, a short first-run tour you can skip, Copy buttons everywhere, and light and dark themes. |

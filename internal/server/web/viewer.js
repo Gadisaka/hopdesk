@@ -1,7 +1,7 @@
 'use strict';
 // hopdesk viewer. Served with a strict Content-Security-Policy, so all script lives here.
 const $ = (id) => document.getElementById(id);
-const surface = $('surface'), video = $('video'), canvas = $('canvas');
+const surface = $('surface'), video = $('video'), canvas = $('canvas'), audio = $('audio');
 const ctx2d = canvas.getContext('2d');
 let pc = null, framesDc = null, ctrl = null, mode = 'jpeg', connected = false;
 let frames = new Map(), lastDrawn = -1;
@@ -141,7 +141,13 @@ async function connect() {
   const cfg = await fetch('config').then((r) => r.json());
   pc = new RTCPeerConnection({ iceServers: cfg.iceServers || [] });
   pc.addTransceiver('video', { direction: 'recvonly' });
+  pc.addTransceiver('audio', { direction: 'recvonly' });
   pc.ontrack = (e) => {
+    if (e.track.kind === 'audio') {
+      audio.srcObject = new MediaStream([e.track]);
+      try { e.receiver.jitterBufferTarget = 0; } catch (_) {}
+      return;
+    }
     video.srcObject = e.streams[0] || new MediaStream([e.track]);
     try { e.receiver.playoutDelayHint = 0; } catch (_) {}
     try { e.receiver.jitterBufferTarget = 0; } catch (_) {}
@@ -185,6 +191,7 @@ function disconnect(keepStatus) {
   cwd = ''; $('list').innerHTML = ''; $('transfers').innerHTML = '';
   frames.clear(); lastDrawn = -1;
   video.srcObject = null; video.hidden = true; canvas.hidden = true;
+  audio.srcObject = null; audio.muted = true; soundOn = false; showSound(false);
   $('hint').hidden = false;
   $('login').hidden = false; $('controls').hidden = true; $('files').hidden = true;
   if (window.HopTouch) HopTouch.onDisconnected();
@@ -233,12 +240,54 @@ function onHello(m) {
   remoteHome = m.home;
   remoteOS = m.os || '';
   if (window.HopTouch) HopTouch.onConnected();
+  showSound(!!m.audio);
   if (!helloSeen) {
     helloSeen = true;
+    if (m.audio && prefGet('hopdesk-sound') === '1') setSound(true, true);
     if (m.os === 'windows' && /Mac/.test(navigator.platform)) $('swap').checked = true;
   }
   $('controls').title = mode === 'h264' ? 'H.264 video' : 'JPEG frames (install ffmpeg on the remote for smoother video)';
 }
+// ---------- sound ----------
+// Sound starts off: browsers only play audio after a tap, and the computer only
+// captures sound while someone is listening.
+let soundOn = false;
+function prefGet(k) { try { return localStorage.getItem(k); } catch (_) { return null; } }
+function prefSet(k, v) { try { localStorage.setItem(k, v); } catch (_) {} }
+function showSound(avail) {
+  $('soundBtn').hidden = !avail;
+  $('volumeRow').hidden = !avail;
+  paintSound();
+}
+function paintSound() {
+  const b = $('soundBtn');
+  b.setAttribute('aria-pressed', soundOn ? 'true' : 'false');
+  const t = soundOn ? 'Turn sound off' : 'Turn sound on';
+  b.title = t; b.setAttribute('aria-label', t);
+}
+function setSound(on, auto) {
+  soundOn = on;
+  send({ t: 'audio', on });
+  audio.muted = !on;
+  if (!auto) prefSet('hopdesk-sound', on ? '1' : '0');
+  paintSound();
+  if (on) {
+    const p = audio.play();
+    if (p && p.catch) p.catch(() => {
+      // The browser wants a tap first. Stay off until the person taps the speaker.
+      soundOn = false; audio.muted = true; send({ t: 'audio', on: false }); paintSound();
+      if (auto) toast('Tap the speaker to hear sound');
+    });
+  }
+}
+$('soundBtn').addEventListener('click', () => { setSound(!soundOn); surface.focus(); });
+$('volume').value = prefGet('hopdesk-volume') || '100';
+audio.volume = (+$('volume').value || 0) / 100;
+$('volume').addEventListener('input', () => {
+  audio.volume = (+$('volume').value) / 100;
+  prefSet('hopdesk-volume', $('volume').value);
+});
+
 function sendSettings() {
   send({ t: 'settings', display: +$('display').value, quality: $('quality').value, fps: +$('fps').value });
   surface.focus();
