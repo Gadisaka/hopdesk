@@ -130,7 +130,7 @@ function renderTailnet(s) {
 }
 
 async function refresh() {
-  try { render(await api('state')); }
+  try { render(await api('state')); maybeTour(); }
   catch (e) { $('pill').textContent = 'Not running'; $('pill').className = 'pill error'; }
 }
 
@@ -142,13 +142,10 @@ document.querySelectorAll('input, select').forEach((el) => el.addEventListener('
 $('modeConnect').onclick = () => { setMode('connect'); dirty = true; };
 $('modeHost').onclick = () => { setMode('host'); dirty = true; };
 $('showKey').onclick = () => { const k = $('hostKey'); k.type = k.type === 'password' ? 'text' : 'password'; };
-$('copyViewer').onclick = () => navigator.clipboard.writeText($('viewerUrl').textContent).then(() => msg('Address copied', true));
-$('copyAgent').onclick = () => navigator.clipboard.writeText($('agentUrl').textContent).then(() => msg('Server address copied', true));
 $('tsSignOut').onclick = async () => {
   if (!confirm('Sign this computer out of Tailscale? Your other devices will lose access until you sign in again.')) return;
   try { await api('tailscale-logout', {}); msg('Signed out. Restarting…', true); } catch (e) { msg(e.message); }
 };
-$('copyKey').onclick = () => navigator.clipboard.writeText($('hostKey').value).then(() => msg('Agent key copied', true));
 $('newKey').onclick = () => { if (confirm('Make a new agent key? Your other computers will need the new one.')) newKey(); };
 
 $('ackPw').onclick = async () => { await api('password', { action: 'ack' }); refresh(); };
@@ -190,6 +187,55 @@ $('quit').onclick = async () => {
   if (!confirm('Quit HopDesk? Nobody will be able to connect to this computer until you open it again.')) return;
   await api('quit', {}); $('pill').textContent = 'Stopped'; $('pill').className = 'pill error';
 };
+
+// ---------- guide and first-run tour ----------
+
+$('helpLink').onclick = (e) => {
+  e.preventDefault();
+  const w = window.open('help.html', 'hopdesk-guide');
+  if (w) w.focus();
+};
+
+const TOUR = [
+  { title: 'Welcome to HopDesk',
+    text: ['This page sets up this computer so you can see and control it from your phone or another computer, from anywhere.',
+           'Here is a one-minute tour of each part. You can skip it now and replay it any time from the bottom of the page.'] },
+  { el: '#newPwCard', title: 'Your password',
+    text: ['Anyone who wants to control this computer needs this password, so keep it private.',
+           'Click Copy and save it in a password manager or somewhere safe. It is shown only once.'] },
+  { el: '#rowDevice', title: 'Device name',
+    text: ['The name of this computer, like a contact name. You type it in the browser to pick which computer to connect to.',
+           'Choose something easy to remember, like home-mac or office-pc.'] },
+  { el: '#rowFp', title: 'Fingerprint',
+    text: ['A code that belongs only to this computer, like a signature.',
+           'The first time you connect from a browser, it shows this code. Check they match: that is how you know you reached your real computer. You never have to type it.'] },
+  { el: '#pwFoot', title: 'Change the password',
+    text: ['Lost the password, or gave it to someone who should no longer have it? Make a new one here. Choose my own lets you type your own.'] },
+  { el: '#permCard', title: 'Mac permissions',
+    text: ['macOS asks before any app can see the screen or move the mouse.',
+           'Screen Recording sends the picture of this screen. Accessibility lets your mouse and keyboard work. Click Grant and switch on HopDesk in the window that opens.'] },
+  { el: '#modes', title: 'How your devices find this computer',
+    text: ['This computer is the server: choose this for your first HopDesk computer. It becomes the meeting point, and you get an address to open in any browser.',
+           'Use a HopDesk server: choose this for each extra computer, to join the server you already set up.'] },
+  { el: '#prefCard', title: 'Preferences',
+    text: ['Picture quality, smoothness, copy and paste between computers, and whether someone here must approve each connection. The defaults are fine for most people.'] },
+  { el: '#save', title: 'Save and restart',
+    text: ['Changes on this page take effect when you click this. Anyone connected is briefly disconnected.'] },
+  { el: '#helpLink', title: 'Need more help?',
+    text: ['This guide explains every word on this page in plain language, including the difference between the agent, the viewer and the server.'] },
+];
+
+function startTour(force) {
+  return HopUI.tour.start({ id: 'settings-v1', steps: TOUR, force, doneLabel: 'Got it' });
+}
+$('tourBtn').onclick = () => startTour(true);
+
+let tourChecked = false;
+function maybeTour() {
+  if (tourChecked) return;
+  tourChecked = true;
+  setTimeout(() => startTour(false), 400); // first visit only; Skip or Done remembers it
+}
 
 if (!token) { $('pill').textContent = 'Open HopDesk from its menu'; $('pill').className = 'pill error'; }
 else { refresh(); setInterval(refresh, 2000); }

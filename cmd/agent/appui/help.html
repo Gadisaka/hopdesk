@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>How to use HopDesk</title>
+<link rel="icon" href="logo.svg">
+<link rel="stylesheet" href="ui.css">
+<script src="theme.js"></script>
+<style>
+  html { scroll-behavior: smooth; scroll-padding-top: 84px; }
+  body { background: var(--bg); }
+  header.top { position: sticky; top: 0; z-index: 20; background: color-mix(in srgb, var(--bg) 85%, transparent); backdrop-filter: saturate(180%) blur(10px); border-bottom: 1px solid var(--border); }
+  .bar { max-width: 1140px; margin: 0 auto; height: 60px; padding: 0 24px; display: flex; align-items: center; gap: 12px; }
+  .bar .title { font-weight: 500; color: var(--fg); }
+  .bar .spacer { flex: 1; }
+  #back { text-decoration: none; }
+
+  .layout { max-width: 1140px; margin: 0 auto; padding: 0 24px; display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 56px; }
+  nav.toc { position: sticky; top: 60px; align-self: start; padding: 40px 0; max-height: calc(100vh - 60px); overflow: auto; }
+  nav.toc .lbl { font-size: 12px; font-weight: 500; text-transform: uppercase; letter-spacing: .06em; color: var(--fg-subtle); margin: 0 0 10px 10px; }
+  nav.toc a { display: block; padding: 6px 10px; border-radius: 6px; color: var(--fg-muted); text-decoration: none; font-size: 14px; }
+  nav.toc a:hover { color: var(--fg); background: var(--bg-hover); }
+  nav.toc a.on { color: var(--fg); font-weight: 500; background: var(--bg-muted); }
+
+  article { padding: 40px 0 96px; max-width: 780px; }
+  .eyebrow { font-size: 13px; font-weight: 500; color: var(--blue); margin-bottom: 10px; }
+  h1 { margin: 0; font-size: 42px; line-height: 1.1; font-weight: 700; letter-spacing: -0.045em; }
+  .lead { margin: 16px 0 0; font-size: 18px; line-height: 1.6; color: var(--fg-muted); max-width: 680px; }
+  section { padding-top: 56px; }
+  h2 { margin: 0 0 6px; font-size: 26px; font-weight: 650; letter-spacing: -0.03em; }
+  h2 + .sub { margin: 0 0 22px; color: var(--fg-muted); font-size: 16px; line-height: 1.6; }
+  h3 { margin: 28px 0 8px; font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
+  p, li { line-height: 1.7; font-size: 15.5px; }
+  article p { margin: 0 0 14px; }
+  b, strong { font-weight: 600; color: var(--fg); }
+  .muted { color: var(--fg-muted); }
+  kbd { font: 500 12.5px "Geist Mono", ui-monospace, Menlo, monospace; padding: 2px 6px; border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 5px; background: var(--bg-subtle); }
+  code { font: 13.5px "Geist Mono", ui-monospace, Menlo, monospace; padding: 1px 5px; border-radius: 5px; background: var(--bg-muted); }
+
+  .quick { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 28px; }
+  .quick a { display: block; padding: 16px; border: 1px solid var(--border); border-radius: 12px; text-decoration: none; color: var(--fg); transition: border-color .15s, background .15s; }
+  .quick a:hover { border-color: var(--border-strong); background: var(--bg-subtle); }
+  .quick b { display: block; font-size: 14.5px; margin-bottom: 4px; }
+  .quick span { color: var(--fg-muted); font-size: 13.5px; line-height: 1.5; }
+
+  .figure { margin: 8px 0 24px; padding: 20px; border: 1px solid var(--border); border-radius: 14px; background: var(--bg-subtle); }
+  .figure svg { display: block; width: 100%; height: auto; }
+  .figure figcaption, .figure .cap { margin-top: 12px; color: var(--fg-muted); font-size: 13.5px; text-align: center; }
+  .d-box { fill: var(--bg); stroke: var(--border-strong); stroke-width: 1.2; }
+  .d-box.hl { stroke: var(--fg); stroke-width: 1.8; }
+  .d-tag { fill: var(--bg-muted); }
+  .d-t { fill: var(--fg); font: 600 15px "Geist", "Inter", -apple-system, system-ui, sans-serif; }
+  .d-s { fill: var(--fg-muted); font: 400 12.5px "Geist", "Inter", -apple-system, system-ui, sans-serif; }
+  .d-k { fill: var(--fg-muted); font: 600 11px "Geist", "Inter", -apple-system, system-ui, sans-serif; letter-spacing: .08em; }
+  .d-ic { fill: none; stroke: var(--fg); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  .d-line { fill: none; stroke: var(--fg-subtle); stroke-width: 1.5; stroke-dasharray: 5 5; }
+  .d-main { fill: none; stroke: var(--blue); stroke-width: 2.5; }
+  .d-blue { fill: var(--blue); }
+  .d-bt { fill: var(--blue); font: 600 12.5px "Geist", "Inter", -apple-system, system-ui, sans-serif; }
+  .d-arrow { fill: var(--fg-subtle); }
+
+  .parts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .part { border: 1px solid var(--border); border-radius: 12px; padding: 18px; background: var(--bg); }
+  .part .ic { width: 36px; height: 36px; border-radius: 9px; display: grid; place-items: center; border: 1px solid var(--border); background: var(--bg-subtle); margin-bottom: 12px; }
+  .part .ic svg { width: 18px; height: 18px; }
+  .part h4 { margin: 0; font-size: 15.5px; font-weight: 600; }
+  .part .aka { font-size: 12.5px; color: var(--fg-subtle); margin: 2px 0 10px; }
+  .part p { font-size: 14px; color: var(--fg-muted); margin: 0 0 10px; line-height: 1.6; }
+  .part dl { margin: 0; font-size: 13.5px; border-top: 1px solid var(--border); padding-top: 10px; }
+  .part dt { color: var(--fg-subtle); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; margin-top: 8px; }
+  .part dd { margin: 2px 0 0; color: var(--fg); line-height: 1.5; }
+
+  .callout { display: flex; gap: 12px; padding: 14px 16px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg-subtle); margin: 18px 0; }
+  .callout svg { width: 18px; height: 18px; flex: none; margin-top: 3px; color: var(--fg-muted); }
+  .callout p { margin: 0; font-size: 14.5px; color: var(--fg-muted); }
+  .callout.info { background: var(--blue-bg); border-color: transparent; }
+  .callout.info svg, .callout.info b { color: var(--blue); }
+  .callout.warn { background: var(--amber-bg); border-color: transparent; }
+  .callout.warn svg, .callout.warn b { color: var(--amber); }
+
+  .compare { width: 100%; border-collapse: separate; border-spacing: 0; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; margin: 8px 0 18px; font-size: 14.5px; }
+  .compare th, .compare td { text-align: left; padding: 12px 14px; vertical-align: top; line-height: 1.55; }
+  .compare th { background: var(--bg-subtle); font-weight: 600; font-size: 13px; color: var(--fg-muted); }
+  .compare tr + tr td { border-top: 1px solid var(--border); }
+  .compare td:first-child { color: var(--fg-muted); width: 34%; }
+
+  ol.steps { list-style: none; counter-reset: s; padding: 0; margin: 8px 0 0; }
+  ol.steps > li { counter-increment: s; position: relative; padding: 0 0 26px 52px; }
+  ol.steps > li::before {
+    content: counter(s); position: absolute; left: 0; top: -1px; width: 30px; height: 30px; border-radius: 50%;
+    display: grid; place-items: center; font: 600 13.5px "Geist Mono", ui-monospace, monospace;
+    background: var(--bg); border: 1px solid var(--border-strong); color: var(--fg);
+  }
+  ol.steps > li::after { content: ""; position: absolute; left: 15px; top: 34px; bottom: 6px; width: 1px; background: var(--border); }
+  ol.steps > li:last-child::after { display: none; }
+  ol.steps > li > b:first-child { display: block; font-size: 15.5px; margin-bottom: 2px; }
+  ol.steps p { margin: 4px 0 0; color: var(--fg-muted); }
+  ol.steps ul { margin: 6px 0 0; padding-left: 18px; color: var(--fg-muted); }
+  ol.steps ul li { font-size: 14.5px; }
+
+  .tabs { display: inline-flex; padding: 3px; gap: 2px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-subtle); margin: 4px 0 18px; }
+  .tabs button { height: 32px; border: 0; background: transparent; color: var(--fg-muted); font-size: 13.5px; border-radius: 7px; }
+  .tabs button[aria-selected="true"] { background: var(--bg); color: var(--fg); box-shadow: var(--shadow-sm); }
+  .tabs button:hover:not([aria-selected="true"]) { background: transparent; color: var(--fg); }
+
+  .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .ctl { display: flex; gap: 12px; padding: 14px; border: 1px solid var(--border); border-radius: 10px; }
+  .ctl .ic { width: 32px; height: 32px; flex: none; border-radius: 8px; display: grid; place-items: center; background: var(--bg-muted); }
+  .ctl .ic svg { width: 16px; height: 16px; }
+  .ctl b { display: block; font-size: 14.5px; }
+  .ctl span { color: var(--fg-muted); font-size: 13.5px; line-height: 1.55; }
+
+  .gloss-tools { display: flex; gap: 10px; align-items: center; margin-bottom: 14px; }
+  .gloss-tools input { flex: 1; height: 40px; }
+  .gloss-count { color: var(--fg-subtle); font-size: 13px; white-space: nowrap; }
+  dl.gloss { margin: 0; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  .term { padding: 16px 18px; display: grid; grid-template-columns: 200px 1fr; gap: 4px 20px; }
+  .term + .term { border-top: 1px solid var(--border); }
+  .term dt { font-weight: 600; font-size: 15px; }
+  .term dt small { display: block; font-weight: 400; color: var(--fg-subtle); font-size: 12.5px; margin-top: 2px; }
+  .term dd { margin: 0; color: var(--fg-muted); font-size: 14.5px; line-height: 1.65; }
+  .term dd .where { display: block; margin-top: 6px; font-size: 13px; color: var(--fg-subtle); }
+  .term:target { background: var(--blue-bg); }
+  #glossEmpty { padding: 24px; text-align: center; color: var(--fg-muted); }
+
+  details.q { border: 1px solid var(--border); border-radius: 10px; margin-bottom: 8px; background: var(--bg); }
+  details.q summary { cursor: pointer; list-style: none; padding: 14px 16px; font-weight: 500; font-size: 15px; display: flex; align-items: center; gap: 10px; }
+  details.q summary::-webkit-details-marker { display: none; }
+  details.q summary::after { content: ""; margin-left: auto; width: 16px; height: 16px; background: var(--chevron) center / 12px no-repeat; transition: transform .15s; }
+  details.q[open] summary::after { transform: rotate(180deg); }
+  details.q .a { padding: 0 16px 14px; color: var(--fg-muted); }
+  details.q .a p { font-size: 14.5px; margin: 0 0 8px; }
+  details.q .a ul { margin: 0 0 8px; padding-left: 18px; font-size: 14.5px; }
+
+  footer.end { margin-top: 64px; padding-top: 24px; border-top: 1px solid var(--border); color: var(--fg-subtle); font-size: 13.5px; display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  footer.end a { color: var(--fg-muted); }
+
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; gap: 0; }
+    nav.toc { display: none; }
+    .parts, .quick { grid-template-columns: 1fr; }
+    .controls { grid-template-columns: 1fr; }
+    .term { grid-template-columns: 1fr; }
+    h1 { font-size: 34px; }
+  }
+  @media (max-width: 560px) { .bar .title, .crumb-sep { display: none; } }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="bar">
+    <span class="brand">
+      <svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="15" fill="currentColor"/><g fill="none" style="stroke:var(--bg)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><rect x="11" y="21" width="24" height="17" rx="3"/><path d="M20 15c6-6 18-6 24 2M45 11l-1 7-6-2"/></g><rect x="31" y="31" width="22" height="15" rx="3" style="fill:var(--bg)"/></svg>
+      HopDesk
+    </span>
+    <span class="crumb-sep">/</span>
+    <span class="title">Guide</span>
+    <span class="spacer"></span>
+    <a id="back" class="guide-link" href="./"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></svg><span>Back to HopDesk</span></a>
+    <div class="theme-switch" role="group" aria-label="Theme">
+      <button data-theme-choice="system" title="System theme" aria-label="System theme"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg></button>
+      <button data-theme-choice="light" title="Light theme" aria-label="Light theme"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>
+      <button data-theme-choice="dark" title="Dark theme" aria-label="Dark theme"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg></button>
+    </div>
+  </div>
+</header>
+
+<div class="layout">
+  <nav class="toc" aria-label="On this page">
+    <div class="lbl">On this page</div>
+    <a href="#start">What HopDesk does</a>
+    <a href="#parts">The three parts</a>
+    <a href="#who">Who controls whom</a>
+    <a href="#setup">Set it up</a>
+    <a href="#connect">Connect to a computer</a>
+    <a href="#session">While you're connected</a>
+    <a href="#words">Every word explained</a>
+    <a href="#trouble">If something goes wrong</a>
+    <a href="#safety">Staying safe</a>
+  </nav>
+
+  <article>
+    <!-- ============ intro ============ -->
+    <section id="start" style="padding-top:0">
+      <div class="eyebrow">Guide</div>
+      <h1>How to use HopDesk</h1>
+      <p class="lead">HopDesk lets you see another computer's screen and use it with your own mouse and keyboard, from anywhere. For example, you can use your home computer from your phone or from a laptop at work. You don't need any technical knowledge: this page explains every step and every word.</p>
+      <div class="quick">
+        <a href="#setup"><b>First time?</b><span>Set up the computer you want to reach. About 5 minutes.</span></a>
+        <a href="#connect"><b>Already set up?</b><span>Connect to it from a browser.</span></a>
+        <a href="#words"><b>Saw a word you don't know?</b><span>Every term, in plain language.</span></a>
+      </div>
+    </section>
+
+    <!-- ============ parts ============ -->
+    <section id="parts">
+      <h2>The three parts</h2>
+      <p class="sub">HopDesk has three parts. A phone call is a good comparison: two people (your device and the other computer) and a phone network that connects them (the server).</p>
+
+      <div class="figure">
+        <svg viewBox="0 0 760 290" role="img" aria-label="Your device with the viewer and the computer with the agent both reach the server, then talk directly">
+          <!-- server -->
+          <rect class="d-box" x="270" y="12" width="220" height="86" rx="12"/>
+          <text class="d-k" x="380" y="38" text-anchor="middle">SERVER</text>
+          <text class="d-t" x="380" y="62" text-anchor="middle">The meeting point</text>
+          <text class="d-s" x="380" y="82" text-anchor="middle">Introduces the two sides</text>
+          <!-- viewer -->
+          <rect class="d-box" x="10" y="150" width="230" height="110" rx="12"/>
+          <g transform="translate(28,172)"><rect class="d-ic" x="0" y="0" width="26" height="18" rx="2"/><path class="d-ic" d="M-3 22h32"/></g>
+          <text class="d-k" x="66" y="182">VIEWER</text>
+          <text class="d-t" x="28" y="218">Your phone or laptop</text>
+          <text class="d-s" x="28" y="240">A web page. You control from here</text>
+          <!-- agent -->
+          <rect class="d-box hl" x="520" y="150" width="230" height="110" rx="12"/>
+          <g transform="translate(538,170)"><rect class="d-ic" x="0" y="0" width="28" height="19" rx="2"/><path class="d-ic" d="M9 25h10M14 19v6"/></g>
+          <text class="d-k" x="578" y="182">AGENT</text>
+          <text class="d-t" x="538" y="218">The computer you reach</text>
+          <text class="d-s" x="538" y="240">Has the HopDesk app. Is controlled</text>
+          <!-- dashed: find each other -->
+          <path class="d-line" d="M205 150 C205 100 235 72 268 66"/>
+          <path class="d-line" d="M555 150 C555 100 525 72 492 66"/>
+          <text class="d-s" x="190" y="120" text-anchor="end">① “Where is studio-mac?”</text>
+          <text class="d-s" x="570" y="120">① “I'm studio-mac, I'm here”</text>
+          <!-- direct -->
+          <path class="d-main" d="M246 205 H514"/>
+          <path class="d-blue" d="M514 205 l-10 -6 v12z"/><path class="d-blue" d="M246 205 l10 -6 v12z"/>
+          <text class="d-bt" x="380" y="192" text-anchor="middle">② Then they talk directly</text>
+          <text class="d-s" x="380" y="228" text-anchor="middle">screen picture, mouse, keyboard, files</text>
+          <text class="d-s" x="380" y="246" text-anchor="middle">all encrypted</text>
+        </svg>
+        <div class="cap">The server only introduces them. After that, the picture goes straight from one computer to the other.</div>
+      </div>
+
+      <div class="parts">
+        <div class="part">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg></div>
+          <h4>Agent</h4>
+          <div class="aka">“the computer you reach”</div>
+          <p>This is the HopDesk app, installed on a computer you want to use from somewhere else. It shares that computer's screen and follows the mouse and keyboard you send it.</p>
+          <dl><dt>Lives on</dt><dd>The computer at home or at the office (Mac or Windows)</dd><dt>You need</dt><dd>To install the HopDesk app once</dd></dl>
+        </div>
+        <div class="part">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.5 3 14.5 0 18M12 3c-3 3.5-3 14.5 0 18"/></svg></div>
+          <h4>Viewer</h4>
+          <div class="aka">“where you sit”</div>
+          <p>This is a web page you open in any browser (Chrome, Safari, Edge…). It shows the other computer's screen, and your clicks and typing go to that computer.</p>
+          <dl><dt>Lives on</dt><dd>Any phone, tablet or computer with a browser</dd><dt>You need</dt><dd>Nothing to install. Just the address.</dd></dl>
+        </div>
+        <div class="part">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="7" rx="2"/><rect x="4" y="14" width="16" height="7" rx="2"/><path d="M8 6.5h.01M8 17.5h.01"/></svg></div>
+          <h4>Server</h4>
+          <div class="aka">“the meeting point”</div>
+          <p>The server helps the viewer and the agent find each other, like a phone network that connects a call. It also serves the viewer page. It never sees your screen or your password.</p>
+          <dl><dt>Lives on</dt><dd>Usually one of your own computers, by ticking <b>This computer is the server</b> in the app</dd><dt>You need</dt><dd>One per household or team</dd></dl>
+        </div>
+      </div>
+
+      <div class="callout info">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
+        <p><b>One computer can be two things at once.</b> If you tick “This computer is the server”, that computer is the meeting point <i>and</i> an agent you can reach. Most people only ever need this one computer.</p>
+      </div>
+    </section>
+
+    <!-- ============ who controls whom ============ -->
+    <section id="who">
+      <h2>Who controls whom</h2>
+      <p class="sub">This is the question people ask most. The short answer: <b>the browser controls the computer that has the HopDesk app.</b> Never the other way around.</p>
+
+      <div class="figure">
+        <svg viewBox="0 0 760 170" role="img" aria-label="The viewer controls the agent; the agent cannot control the viewer">
+          <rect class="d-box" x="10" y="30" width="250" height="110" rx="12"/>
+          <text class="d-k" x="135" y="62" text-anchor="middle">YOU, IN A BROWSER</text>
+          <text class="d-t" x="135" y="90" text-anchor="middle">Viewer</text>
+          <text class="d-s" x="135" y="114" text-anchor="middle">sees and controls</text>
+          <rect class="d-box hl" x="500" y="30" width="250" height="110" rx="12"/>
+          <text class="d-k" x="625" y="62" text-anchor="middle">COMPUTER WITH HOPDESK</text>
+          <text class="d-t" x="625" y="90" text-anchor="middle">Agent</text>
+          <text class="d-s" x="625" y="114" text-anchor="middle">is seen and controlled</text>
+          <path class="d-main" d="M268 72 H488"/><path class="d-blue" d="M492 72 l-12 -7 v14z"/>
+          <text class="d-bt" x="380" y="60" text-anchor="middle">mouse and keyboard</text>
+          <path class="d-line" d="M488 112 H272"/><path class="d-arrow" d="M268 112 l12 -7 v14z"/>
+          <text class="d-s" x="380" y="134" text-anchor="middle">picture of the screen comes back</text>
+        </svg>
+      </div>
+
+      <table class="compare">
+        <tr><th>If you want to…</th><th>Then…</th></tr>
+        <tr><td>Use your <b>home computer</b> from your <b>phone</b></td><td>Install HopDesk on the home computer. On the phone, just open the address in a browser.</td></tr>
+        <tr><td>Use your <b>office PC</b> from your <b>home Mac</b></td><td>Install HopDesk on the office PC. On the Mac, open the address in a browser.</td></tr>
+        <tr><td>Control <b>both ways</b> (A controls B, and B controls A)</td><td>Install HopDesk on both. Each one can then also open the other in its browser.</td></tr>
+        <tr><td>Help a <b>family member</b> with their computer</td><td>Install HopDesk on <i>their</i> computer and connect it to your server. You open it in your browser.</td></tr>
+      </table>
+
+      <div class="callout">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+        <p>Installing HopDesk on a computer does <b>not</b> let it control anything else. It only lets <i>you</i> reach that computer, and only with its password.</p>
+      </div>
+    </section>
+
+    <!-- ============ setup ============ -->
+    <section id="setup">
+      <h2>Set it up, step by step</h2>
+      <p class="sub">Pick the situation that matches yours.</p>
+
+      <div class="tabs" role="tablist">
+        <button role="tab" aria-selected="true" aria-controls="setupOne" id="tabOne">One computer to reach</button>
+        <button role="tab" aria-selected="false" aria-controls="setupMore" id="tabMore">Adding more computers</button>
+      </div>
+
+      <div id="setupOne" role="tabpanel" aria-labelledby="tabOne">
+        <p>Start here if this is your first time. You'll set up one computer that you can reach from anywhere.</p>
+        <ol class="steps">
+          <li><b>Install HopDesk on the computer you want to reach</b>
+            <p>Download it from the releases page: the <code>.dmg</code> file for a Mac, the <code>.exe</code> file for Windows. Open it and install like any other app. The HopDesk settings page opens on its own, and a small HopDesk icon appears in the menu bar (Mac) or the system tray (Windows).</p></li>
+          <li><b>Save the password</b>
+            <p>A blue box shows this computer's password, for example <code>k7mp-2xqa-9rtw-hd3f</code>. Click <b>Copy</b> and keep it somewhere safe, like a password manager. HopDesk shows it only once. If you lose it, click <b>Generate new</b> to get a new one.</p></li>
+          <li><b>Allow HopDesk on a Mac (skip on Windows)</b>
+            <p>Under <b>macOS permissions</b>, click <b>Grant</b> next to each item, then switch on <b>HopDesk</b> in the window that opens:</p>
+            <ul><li><b>Screen Recording</b>: lets HopDesk send a picture of the screen.</li><li><b>Accessibility</b>: lets your mouse and keyboard work.</li></ul>
+            <p>After turning on Screen Recording, click <b>Restart HopDesk</b>.</p></li>
+          <li><b>Choose “This computer is the server”</b>
+            <p>In the <b>Connection</b> box, click <b>This computer is the server</b>, then click <b>Save and restart</b> at the bottom.</p></li>
+          <li><b>Sign in to Tailscale once</b>
+            <p>Click <b>Sign in to Tailscale</b> and create a free account (you can sign in with Google, Microsoft or Apple). Tailscale is built into HopDesk; it's what lets your computer be reached from anywhere without router settings. If the page asks for one more step (turning on HTTPS or Funnel), click the link it shows and press the button there.</p></li>
+          <li><b>Copy the address</b>
+            <p>When the green message <b>Reachable from anywhere</b> appears, copy the address next to <b>Open in any browser</b>. It looks like <code>https://hopdesk-studio-mac.tail4b2c.ts.net</code>. Save it as a bookmark on your phone and laptop. That's it: <a href="#connect">now connect</a>.</p></li>
+        </ol>
+      </div>
+
+      <div id="setupMore" role="tabpanel" aria-labelledby="tabMore" hidden>
+        <p>Already have one computer set up as the server? Add as many more as you like. They all use that same server.</p>
+        <ol class="steps">
+          <li><b>On the server computer, copy two things</b>
+            <p>Open its HopDesk settings. Under <b>Connection</b>, copy:</p>
+            <ul><li>the <b>Other computers' server</b> address (starts with <code>wss://</code>)</li><li>the <b>Agent key</b> (a long secret code, so strangers can't add their computers to your server)</li></ul></li>
+          <li><b>Install HopDesk on the new computer</b>
+            <p>Same as before. Save its password, and on a Mac grant the two permissions.</p></li>
+          <li><b>Choose “Use a HopDesk server”</b>
+            <p>Paste the server address into <b>Server address</b> and the agent key into <b>Agent key</b>. Click <b>Save and restart</b>.</p></li>
+          <li><b>Check it says Online</b>
+            <p>The badge at the top of the settings page turns green. Now you can reach this computer from the same browser address as the server, by typing <i>its</i> device name and password.</p></li>
+        </ol>
+        <div class="figure">
+          <svg viewBox="0 0 760 200" role="img" aria-label="Several agents connect to one server; you connect from a browser">
+            <rect class="d-box hl" x="265" y="20" width="230" height="78" rx="12"/>
+            <text class="d-k" x="380" y="44" text-anchor="middle">SERVER + AGENT</text>
+            <text class="d-t" x="380" y="66" text-anchor="middle">studio-mac</text>
+            <text class="d-s" x="380" y="85" text-anchor="middle">“This computer is the server”</text>
+            <rect class="d-box" x="10" y="130" width="210" height="58" rx="12"/>
+            <text class="d-t" x="115" y="155" text-anchor="middle">office-pc</text>
+            <text class="d-s" x="115" y="175" text-anchor="middle">agent · uses studio-mac</text>
+            <rect class="d-box" x="275" y="130" width="210" height="58" rx="12"/>
+            <text class="d-t" x="380" y="155" text-anchor="middle">mum-laptop</text>
+            <text class="d-s" x="380" y="175" text-anchor="middle">agent · uses studio-mac</text>
+            <rect class="d-box" x="540" y="130" width="210" height="58" rx="12"/>
+            <text class="d-t" x="645" y="155" text-anchor="middle">Your phone</text>
+            <text class="d-s" x="645" y="175" text-anchor="middle">viewer · opens the address</text>
+            <path class="d-line" d="M115 130 V110 H300 V100"/><path class="d-line" d="M380 130 V100"/><path class="d-line" d="M645 130 V110 H460 V100"/>
+          </svg>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ connect ============ -->
+    <section id="connect">
+      <h2>Connect to a computer</h2>
+      <p class="sub">Do this from any phone, tablet or computer.</p>
+      <ol class="steps">
+        <li><b>Open the address in a browser</b>
+          <p>Use the address you copied (the one starting with <code>https://</code>). You'll see <b>Connect to a device</b>.</p></li>
+        <li><b>Type the device name and password</b>
+          <p><b>Device</b> is the name shown at the top of HopDesk on that computer, for example <code>studio-mac</code>. <b>Password</b> is the one you saved. Click <b>Connect</b>.</p></li>
+        <li><b>The first time: compare the fingerprint</b>
+          <p>A box shows a code like <code>0C36 86F9 7448 8E47…</code>. Check that it's the same as the <b>Fingerprint</b> in HopDesk on that computer, then click <b>It matches, connect</b>. This makes sure you're talking to your real computer and not an impostor. Your browser remembers it, so you only do this once per browser.</p></li>
+        <li><b>You're in</b>
+          <p>The other screen appears. Click on it, and your mouse and keyboard now work on that computer.</p></li>
+      </ol>
+    </section>
+
+    <!-- ============ session ============ -->
+    <section id="session">
+      <h2>While you're connected</h2>
+      <p class="sub">These controls appear at the top of the viewer.</p>
+      <div class="controls">
+        <div class="ctl"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg></span><div><b>Display</b><span>If the other computer has more than one screen, pick which one to see.</span></div></div>
+        <div class="ctl"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></span><div><b>Quality</b><span>How sharp the picture is. Lower it if things feel slow; raise it on fast internet.</span></div></div>
+        <div class="ctl"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9 2h6"/></svg></span><div><b>fps</b><span>How smooth movement looks. 30 is a good default; 60 is smoother but uses more internet.</span></div></div>
+        <div class="ctl"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10h.01M11 10h.01M15 10h.01M8 14h8"/></svg></span><div><b>Cmd → Ctrl</b><span>Using a Mac to control a Windows PC? Turn this on so <kbd>Cmd</kbd>+<kbd>C</kbd> works as <kbd>Ctrl</kbd>+<kbd>C</kbd>.</span></div></div>
+        <div class="ctl"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span><div><b>Files</b><span>Browse the other computer's files. Download them to this device, or upload files to it.</span></div></div>
+        <div class="ctl"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v8M6.3 6.8a8 8 0 1 0 11.4 0"/></svg></span><div><b>Disconnect</b><span>Ends the session. The other computer keeps running as before.</span></div></div>
+      </div>
+      <p style="margin-top:18px">Copy and paste works between the two computers: copy text on one, paste on the other. (The computer's owner can turn this off.)</p>
+    </section>
+
+    <!-- ============ glossary ============ -->
+    <section id="words">
+      <h2>Every word explained</h2>
+      <p class="sub">Every term you'll see in HopDesk, in alphabetical order. Type to search.</p>
+      <div class="gloss-tools">
+        <input id="glossFilter" type="search" placeholder="Search, e.g. fingerprint" aria-label="Search the word list" autocomplete="off" spellcheck="false">
+        <span class="gloss-count" id="glossCount"></span>
+      </div>
+      <dl class="gloss" id="gloss">
+        <div class="term" id="w-accessibility"><dt>Accessibility<small>Mac permission</small></dt><dd>A Mac privacy setting. Turning it on for HopDesk lets the mouse and keyboard from your browser work on that Mac. Without it you can watch, but not click or type.<span class="where">Where: settings page → macOS permissions → Grant</span></dd></div>
+        <div class="term" id="w-agent"><dt>Agent<small>the computer you reach</small></dt><dd>The HopDesk app on a computer you want to use remotely. It shares that computer's screen and follows your mouse and keyboard. Every computer you install HopDesk on is an agent.<span class="where">See <a href="#parts">the three parts</a></span></dd></div>
+        <div class="term" id="w-agent-key"><dt>Agent key</dt><dd>A long secret code that your computers use to join your server. It stops strangers from adding their computers to it. It's not the same as the password: the <b>password</b> lets a person control a computer, while the <b>agent key</b> lets a computer join the server. You only need it when <a href="#setup">adding more computers</a>.<span class="where">Where: settings page → Connection</span></dd></div>
+        <div class="term" id="w-approve"><dt>Approve each connection</dt><dd>When this is on, someone sitting at the computer has to agree before anyone can connect, even with the right password: a box pops up asking to <b>Allow</b> (Mac) or answer <b>Yes</b> (Windows) within 30 seconds. Good for a family member's computer, so they always know when you're connecting.<span class="where">Where: settings page → Preferences</span></dd></div>
+        <div class="term" id="w-clipboard"><dt>Clipboard</dt><dd>Whatever you last copied (with Copy or <kbd>Ctrl</kbd>/<kbd>Cmd</kbd>+<kbd>C</kbd>). HopDesk can share it between the two computers: <b>Sync both ways</b>, <b>Only paste into this computer</b>, or <b>Off</b>.<span class="where">Where: settings page → Preferences</span></dd></div>
+        <div class="term" id="w-cmdctrl"><dt>Cmd → Ctrl</dt><dd>Macs use the <kbd>Cmd</kbd> key for shortcuts and Windows uses <kbd>Ctrl</kbd>. Turn this switch on when you're on a Mac controlling a Windows PC, so your usual shortcuts work.<span class="where">Where: viewer, top bar while connected</span></dd></div>
+        <div class="term" id="w-identity"><dt>Device identity changed</dt><dd>A red warning that the computer is answering with a different fingerprint than last time. That's normal only if you reinstalled HopDesk on it. If you didn't, click <b>Disconnect</b>: someone may be pretending to be your computer. Your password is not sent until you decide.</dd></div>
+        <div class="term" id="w-device-name"><dt>Device name</dt><dd>The name of a computer in HopDesk, like a contact name, for example <code>studio-mac</code>. You type it in the viewer to choose which computer to connect to. Letters, numbers, dashes, dots and underscores only.<span class="where">Where: settings page → This computer</span></dd></div>
+        <div class="term" id="w-display"><dt>Display</dt><dd>One screen (monitor) of the other computer. If it has two, choose which one to see.<span class="where">Where: viewer, top bar while connected</span></dd></div>
+        <div class="term" id="w-e2e"><dt>End-to-end encrypted</dt><dd>Everything between your browser and the other computer is scrambled so that only those two can read it. Not the server, not your internet provider, not Tailscale.</dd></div>
+        <div class="term" id="w-files"><dt>Files</dt><dd>A panel in the viewer for browsing the other computer's folders. Click a file to download it to the device you're on, or click <b>Upload</b> to send files to the other computer.</dd></div>
+        <div class="term" id="w-fingerprint"><dt>Fingerprint</dt><dd>A code that belongs to one specific computer, like a signature, for example <code>0C36 86F9 7448 8E47 BF9B 6AAB 5B7F 69FB</code>. The first time you connect, the viewer shows it so you can check it's the same as in that computer's HopDesk. After that the browser remembers it and warns you in red if it ever changes. You never need to type it; you only compare it.<span class="where">Where: settings page → This computer</span></dd></div>
+        <div class="term" id="w-fps"><dt>Frame rate (fps)</dt><dd>“Frames per second”: how many pictures of the screen are sent each second. More is smoother but uses more internet. 30 is a good default.</dd></div>
+        <div class="term" id="w-local"><dt>Local address</dt><dd>An advanced setting: the internal address the server uses on the computer itself. Leave it as it is unless someone who set up your network asks you to change it.<span class="where">Where: settings page → Connection (server mode)</span></dd></div>
+        <div class="term" id="w-online"><dt>Online / Setup needed / Offline</dt><dd>The badge at the top of the settings page. <b>Online</b> (green): ready to be reached. <b>Setup needed</b> (orange): finish the steps on the page. <b>Offline</b> or <b>Error</b> (red): it can't reach the server; the message on the page says why.</dd></div>
+        <div class="term" id="w-password"><dt>Password</dt><dd>The secret that lets a person control this computer. HopDesk makes a strong one for you (like <code>k7mp-2xqa-9rtw-hd3f</code>) and shows it only once, because it keeps only a scrambled version that can't be turned back. Click <b>Choose my own…</b> to use your own (10+ characters) or <b>Generate new</b> for a fresh one.<span class="where">Where: settings page → This computer</span></dd></div>
+        <div class="term" id="w-permissions"><dt>Permissions</dt><dd>On a Mac, apps need your OK before they can see the screen or move the mouse. HopDesk asks for two: <a href="#w-screen-recording">Screen Recording</a> and <a href="#w-accessibility">Accessibility</a>. Windows doesn't need this.</dd></div>
+        <div class="term" id="w-quality"><dt>Quality</dt><dd>How sharp the picture is. <b>Low</b> (1280 pixels wide) works on slow connections, <b>Medium</b> (1920), <b>High</b> (2560, the default) and <b>Ultra</b> (the screen's full resolution). You can change it during a session.</dd></div>
+        <div class="term" id="w-relay"><dt>Relay</dt><dd>Sometimes two networks can't talk directly (some office or hotel Wi-Fi blocks it). Then the data is passed along through the server instead. It's still end-to-end encrypted; it may just be a little slower.</dd></div>
+        <div class="term" id="w-screen-recording"><dt>Screen Recording<small>Mac permission</small></dt><dd>A Mac privacy setting. Turning it on for HopDesk lets it send a picture of the screen to your browser. Without it you'd see a black or empty screen. macOS needs HopDesk to restart afterwards.<span class="where">Where: settings page → macOS permissions → Grant</span></dd></div>
+        <div class="term" id="w-server"><dt>Server</dt><dd>The meeting point that introduces your browser and your computers to each other, like a phone network connecting a call. It also serves the viewer page. You get one by ticking <b>This computer is the server</b> on one of your computers.<span class="where">See <a href="#parts">the three parts</a></span></dd></div>
+        <div class="term" id="w-server-address"><dt>Server address</dt><dd>Where your other computers find the server. It starts with <code>wss://</code> and ends with <code>/ws</code>. Copy it from the server computer (<b>Other computers' server</b>) and paste it on each new computer.<span class="where">Where: settings page → Connection</span></dd></div>
+        <div class="term" id="w-modes"><dt>Server mode / Use a HopDesk server</dt><dd>The two choices under Connection. <b>This computer is the server</b>: this computer is the meeting point (and can still be reached). <b>Use a HopDesk server</b>: this computer joins a server you set up somewhere else.</dd></div>
+        <div class="term" id="w-login"><dt>Start at login</dt><dd>Starts HopDesk automatically when the computer turns on, so you can still reach it after a restart.<span class="where">Where: settings page → Preferences</span></dd></div>
+        <div class="term" id="w-tailscale"><dt>Tailscale</dt><dd>A free service built into HopDesk that gives your computer a private address that works from anywhere: no router settings, no port forwarding. You only sign in once, on the server computer.</dd></div>
+        <div class="term" id="w-funnel"><dt>Tailscale Funnel / HTTPS</dt><dd>Two Tailscale switches that let any browser, including your phone, open your HopDesk address. If HopDesk asks you to turn them on, it shows a link that goes straight to the right button.</dd></div>
+        <div class="term" id="w-theme"><dt>Theme</dt><dd>Light or dark colors. The three small buttons in the top-right corner: <b>System</b> (match your device), <b>Light</b> or <b>Dark</b>.</dd></div>
+        <div class="term" id="w-video-engine"><dt>Video engine</dt><dd>How the screen picture is packed for sending. HopDesk uses <b>H.264</b>, the same kind of video as streaming services, which looks sharp and uses little internet. Nothing to change.</dd></div>
+        <div class="term" id="w-viewer"><dt>Viewer</dt><dd>The web page you control from. Open it in any browser, at the address from <b>Open in any browser</b>.<span class="where">See <a href="#parts">the three parts</a></span></dd></div>
+        <div class="term" id="w-viewer-address"><dt>Viewer address<small>“Open in any browser”</small></dt><dd>The web address of your HopDesk, like <code>https://hopdesk-studio-mac.tail4b2c.ts.net</code>. Bookmark it on every device you'll connect from.<span class="where">Where: settings page → Connection (server mode)</span></dd></div>
+        <div id="glossEmpty" hidden>No matching words. Try a shorter search.</div>
+      </dl>
+    </section>
+
+    <!-- ============ troubleshooting ============ -->
+    <section id="trouble">
+      <h2>If something goes wrong</h2>
+      <p class="sub">The most common problems, and what to do.</p>
+
+      <details class="q"><summary>“Device is not online”</summary><div class="a">
+        <ul><li>Check the HopDesk app is running on that computer: its badge should say <b>Online</b>.</li>
+        <li>Check the device name is spelled exactly the same.</li>
+        <li>Is the computer asleep? Wake it up, or turn on <b>Start at login</b> and change its sleep settings.</li></ul></div></details>
+
+      <details class="q"><summary>“Wrong password”</summary><div class="a">
+        <p>Passwords are case-sensitive and include the dashes. If you lost it, click <b>Generate new</b> on that computer. After several wrong tries the server makes you wait a little before trying again.</p></div></details>
+
+      <details class="q"><summary>The screen is black or empty</summary><div class="a">
+        <p>On a Mac, HopDesk needs <b>Screen Recording</b>. Grant it, then click <b>Restart HopDesk</b>.</p></div></details>
+
+      <details class="q"><summary>I can see the screen but can't click or type</summary><div class="a">
+        <ul><li>Click once on the picture first, so your keyboard goes to it.</li>
+        <li>On a Mac, grant <b>Accessibility</b>. If it's already on, switch it off and on again in System Settings.</li>
+        <li>On Windows, the dimmed “Do you want to allow this app…” prompts can't be clicked remotely. Someone at the computer has to answer them.</li></ul></div></details>
+
+      <details class="q"><summary>It's slow or choppy</summary><div class="a">
+        <p>Lower <b>Quality</b> to Medium or Low, or <b>fps</b> to 15. Both can be changed while connected.</p></div></details>
+
+      <details class="q"><summary>“This page has to be opened over HTTPS”</summary><div class="a">
+        <p>Browsers only allow secure features on addresses that start with <code>https://</code>. Use the address shown next to <b>Open in any browser</b> in the HopDesk app.</p></div></details>
+
+      <details class="q"><summary>Tailscale keeps asking me to do something</summary><div class="a">
+        <p>The orange message has a link. Open it, sign in with the same account, and press the button it shows (usually to enable HTTPS or Funnel). HopDesk checks again by itself. Nothing to restart.</p></div></details>
+
+      <details class="q"><summary>A red “Device identity changed” warning</summary><div class="a">
+        <p>If you just reinstalled HopDesk on that computer, click <b>Forget old identity</b> and compare the new fingerprint. If you didn't, click <b>Disconnect</b>. Your password has not been sent.</p></div></details>
+    </section>
+
+    <!-- ============ safety ============ -->
+    <section id="safety">
+      <h2>Staying safe</h2>
+      <ol class="steps">
+        <li><b>Treat the password like a house key</b><p>Only give it to people who should be able to use that computer. Change it with <b>Generate new</b> if you're unsure who has it.</p></li>
+        <li><b>Compare the fingerprint the first time</b><p>It takes ten seconds and guarantees you're connected to your own computer.</p></li>
+        <li><b>Never act on a red warning without thinking</b><p>A changed identity you didn't cause means: disconnect.</p></li>
+        <li><b>Nobody legitimate will ask for HopDesk access</b><p>If a stranger on the phone asks you to install HopDesk or read out your password, hang up. HopDesk is for reaching your own computers.</p></li>
+        <li><b>Use “Approve each connection” on shared computers</b><p>Then nobody can connect unless someone at the computer agrees.</p></li>
+      </ol>
+    </section>
+
+    <footer class="end">
+      <span>HopDesk: your own remote desktop.</span>
+      <a href="#start">Back to top ↑</a>
+    </footer>
+  </article>
+</div>
+
+<script src="help.js"></script>
+</body>
+</html>

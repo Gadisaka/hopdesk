@@ -116,7 +116,8 @@ try:
         r = agent.evaluate(f"tryRegister('{KEY}', 'studio-mac')")
         check("a second agent can't take an ID that's online", r.get("message") == "id already online", r.get("message"))
 
-        vctx = browser.new_context(viewport={"width": 1440, "height": 900}, accept_downloads=True)
+        vctx = browser.new_context(viewport={"width": 1440, "height": 900}, accept_downloads=True,
+                                   color_scheme=os.environ.get("THEME", "dark"))
         vctx.grant_permissions(["clipboard-read", "clipboard-write"], origin="http://127.0.0.1:8080")
         v = vctx.new_page()
         console = []
@@ -124,6 +125,17 @@ try:
         v.on("pageerror", lambda e: console.append("pageerror: " + str(e)))
         v.goto("http://127.0.0.1:8080/")
         check("viewer page is served", v.title() == "hopdesk")
+        expect(v.locator(".tour-pop")).to_be_visible(timeout=5000)
+        check("first visit shows the quick tour", "Welcome" in v.locator("#tourTitle").inner_text())
+        v.click(".tour-next"); time.sleep(0.3)
+        check("…which points at the Device field", v.locator("#tourTitle").inner_text() == "Device")
+        v.screenshot(path=f"{OUT}/tour-viewer.png")
+        v.click(".tour-skip")
+        check("…Skip closes it", v.locator(".tour-pop").count() == 0)
+        v.reload(); time.sleep(0.9)
+        check("…and it stays skipped after a reload", v.locator(".tour-pop").count() == 0)
+        h = v.request.get("http://127.0.0.1:8080/help.html")
+        check("the guide page is served", h.ok and "How to use HopDesk" in h.text() and "Every word explained" in h.text())
         v.fill("#id", "studio-mac"); v.fill("#pw", PW)
         v.screenshot(path=f"{OUT}/login.png")
 
@@ -147,6 +159,9 @@ try:
         v.fill("#pw", PW); v.click("#connect")
         expect(v.locator("#status")).to_have_text("Connected to studio-mac", timeout=15000)
         check("connects with the right password, without asking again", v.locator("#modal").is_hidden())
+        expect(v.locator(".tour-pop")).to_be_visible(timeout=6000)
+        check("first session shows the controls tour", v.locator("#tourTitle").inner_text() == "You're connected")
+        v.click(".tour-skip")
         check("password field is cleared after connecting", v.input_value("#pw") == "")
         v.wait_for_function("document.getElementById('video').videoWidth > 0", timeout=15000)
         check("video stream plays", True, v.evaluate("video.videoWidth + 'x' + video.videoHeight"))

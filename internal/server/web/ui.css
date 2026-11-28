@@ -115,7 +115,7 @@ button.sm { height: 32px; padding: 0 10px; font-size: 13px; }
 button.icon { width: 32px; height: 32px; padding: 0; }
 
 /* ---- inputs ---- */
-input[type=text], input[type=password], input[type=email], select {
+input[type=text], input[type=password], input[type=email], input[type=search], select {
   height: 36px; padding: 0 12px; min-width: 0;
   border-radius: 6px; border: 1px solid var(--border-strong);
   background: var(--bg); color: var(--fg);
@@ -123,6 +123,8 @@ input[type=text], input[type=password], input[type=email], select {
   transition: border-color .15s, box-shadow .15s;
 }
 input::placeholder { color: var(--fg-subtle); }
+input[type=search] { -webkit-appearance: none; appearance: none; }
+input[type=search]::-webkit-search-cancel-button { cursor: pointer; opacity: .6; }
 input:hover, select:hover { border-color: var(--fg-subtle); }
 input[readonly] { background: var(--bg-subtle); color: var(--fg-muted); }
 select {
@@ -235,3 +237,46 @@ input.switch:checked::after { transform: translateX(14px); background: var(--acc
 @keyframes pop { from { opacity: 0; transform: translateY(6px) scale(.98); } }
 @keyframes slide { from { opacity: 0; transform: translateY(8px); } }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+
+/* ---- copy buttons ---- */
+button.copy { gap: 6px; }
+button.copy svg { width: 14px; height: 14px; flex: none; }
+button.copy.copied { color: var(--green); border-color: color-mix(in srgb, var(--green) 45%, var(--border)); }
+
+/* ---- guide link ---- */
+.guide-link {
+  display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 10px; border-radius: 8px;
+  color: var(--fg-muted); font-size: 13.5px; font-weight: 500; text-decoration: none; white-space: nowrap;
+}
+.guide-link:hover { color: var(--fg); background: var(--bg-hover); }
+.guide-link svg { width: 16px; height: 16px; }
+
+/* ---- first-run tour ---- */
+.tour-block { position: fixed; inset: 0; z-index: 90; }
+.tour-hole {
+  position: fixed; z-index: 91; pointer-events: none; border-radius: 10px;
+  box-shadow: 0 0 0 2px var(--fg), 0 0 0 9999px rgba(0, 0, 0, .55);
+  transition: left .25s ease, top .25s ease, width .25s ease, height .25s ease;
+}
+.tour-hole.none { box-shadow: 0 0 0 9999px rgba(0, 0, 0, .55); }
+[data-theme="dark"] .tour-hole { box-shadow: 0 0 0 2px var(--fg), 0 0 0 9999px rgba(0, 0, 0, .7); }
+[data-theme="dark"] .tour-hole.none { box-shadow: 0 0 0 9999px rgba(0, 0, 0, .7); }
+.tour-pop {
+  position: fixed; z-index: 92; width: 380px; padding: 18px 18px 14px;
+  background: var(--bg); color: var(--fg); border: 1px solid var(--border); border-radius: 12px;
+  box-shadow: var(--shadow-lg); transition: left .25s ease, top .25s ease;
+}
+.tour-pop.in { animation: pop .2s ease-out; }
+.tour-pop.center { left: 50% !important; top: 50% !important; transform: translate(-50%, -50%); width: 420px; }
+.tour-pop.center.in { animation: fade .2s ease-out; }
+.tour-top { display: flex; align-items: center; justify-content: space-between; margin: -4px -6px 6px 0; }
+.tour-count { font-size: 12px; font-weight: 500; color: var(--fg-subtle); text-transform: uppercase; letter-spacing: .06em; }
+.tour-x { width: 28px; height: 28px; }
+.tour-pop h3 { margin: 0 0 6px; font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
+.tour-text p { margin: 0 0 8px; color: var(--fg-muted); font-size: 14px; line-height: 1.6; }
+.tour-dots { display: flex; gap: 5px; margin: 10px 0 14px; }
+.tour-dots i { width: 6px; height: 6px; border-radius: 99px; background: var(--border-strong); transition: width .2s, background .2s; }
+.tour-dots i.on { width: 18px; background: var(--fg); }
+.tour-btns { display: flex; align-items: center; gap: 8px; }
+.tour-grow { flex: 1; }
+.tour-skip { color: var(--fg-muted); padding-left: 6px; padding-right: 6px; }

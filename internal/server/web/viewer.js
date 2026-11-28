@@ -105,7 +105,7 @@ async function onAuth1(m) {
     if (pinned && pinned !== m.pub) {
       const forget = await ask({
         danger: true, title: 'Device identity changed',
-        text: `"${s.id}" is answering with a different identity than last time. Your password was NOT sent.\n\nThis happens if someone is impersonating the device, or if hopdesk was reinstalled there. Only forget the old identity if you reinstalled it yourself.\n\nNew fingerprint:`,
+        text: `"${s.id}" is answering with a different identity than last time. Your password was NOT sent.\n\nThis happens if someone is impersonating the device, or if HopDesk was reinstalled there. Only forget the old identity if you reinstalled it yourself.\n\nNew fingerprint:`,
         code: fp, ok: 'Forget old identity', cancel: 'Disconnect',
       });
       if (forget) forgetPin(s.id);
@@ -206,6 +206,7 @@ function onCtrl(m) {
       setStatus('Connected to ' + $('id').value.trim());
       $('login').hidden = true; $('controls').hidden = false; $('hint').hidden = true;
       surface.focus();
+      setTimeout(() => { if (connected) startSessionTour(false); }, 1200);
       break;
     case 'hello': onHello(m); break;
     case 'clip': onRemoteClip(m.text); break;
@@ -461,4 +462,44 @@ if (!window.isSecureContext || !window.crypto || !crypto.subtle) {
   $('connect').disabled = true;
   $('hintText').textContent = 'This page has to be opened over HTTPS (or on localhost). Use the https:// address shown in the HopDesk app.';
   setStatus('Needs HTTPS');
+}
+
+// ---------- first-run tours (Skip remembers it in this browser) ----------
+
+const CONNECT_TOUR = [
+  { title: 'Welcome to HopDesk',
+    text: ['From this page you can see and control another computer that has the HopDesk app installed.',
+           'Quick tour of what to type? It takes 30 seconds, or skip it.'] },
+  { el: '#id', title: 'Device',
+    text: ['The name of the computer you want to control, for example studio-mac.',
+           'You can find it at the top of the HopDesk app on that computer.'] },
+  { el: '#pw', title: 'Password',
+    text: ["That computer's password, from its HopDesk app. It never leaves this browser: it is used to prove you know it, without sending it."] },
+  { el: '#connect', title: 'Connect',
+    text: ['The first time, you will see a fingerprint (a code like 0C36 86F9 …). Check it matches the one in the HopDesk app on that computer, then confirm.',
+           'Your browser remembers it, so you only do this once.'] },
+  { el: '#helpLink', title: 'Not sure about something?',
+    text: ['The guide explains what everything means: the agent, the server, the viewer and every setting.'] },
+];
+
+const SESSION_TOUR = [
+  { el: '#surface', title: "You're connected",
+    text: ['This is the other computer\'s screen. Click on it, and your mouse and keyboard now control that computer.'] },
+  { el: '#display', title: 'Display', text: ['That computer has more than one screen. Pick which one to see.'] },
+  { el: '#quality', title: 'Quality', text: ['How sharp the picture is. Lower it if things feel slow.'] },
+  { el: '#fps', title: 'Smoothness (fps)', text: ['Pictures per second. 30 is a good balance; 60 is smoother but uses more internet.'] },
+  { el: '#controls .toggle', title: 'Cmd → Ctrl', text: ['On a Mac controlling a Windows PC? Turn this on so Cmd shortcuts (copy, paste…) work as Ctrl.'] },
+  { el: '#filesBtn', title: 'Files', text: ['Browse that computer\'s files: download them here, or upload files to it.'] },
+  { el: '#disconnect', title: 'Disconnect', text: ['Ends the session. Copy and paste also works between the two computers while connected.'] },
+];
+
+function startSessionTour(force) {
+  HopUI.tour.start({ id: 'viewer-session-v1', steps: SESSION_TOUR, force, doneLabel: 'Start using it',
+    onEnd: () => surface.focus() });
+}
+
+if (window.isSecureContext && !$('login').hidden) {
+  setTimeout(() => {
+    if (!connected) HopUI.tour.start({ id: 'viewer-connect-v1', steps: CONNECT_TOUR, onEnd: () => $('id').focus() });
+  }, 500);
 }
