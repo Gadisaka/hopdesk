@@ -228,7 +228,7 @@ func runApp(restarted bool) {
 	if exists && c.validate() == nil {
 		go startServices(c)
 	} else {
-		setStatus("setup", "Open HopDesk to finish setup")
+		setStatus("setup", "Almost done: choose how this computer connects under Connection, then click Save and restart.")
 		openURL(ui.url())
 	}
 	runTray(ui) // blocks until Quit

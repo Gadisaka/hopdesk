@@ -32,6 +32,7 @@ function render(s) {
   $('pill').textContent = STATE_TEXT[s.state] || s.state;
   $('pill').className = 'pill ' + s.state;
   $('detail').hidden = !s.detail; $('detail').textContent = s.detail || '';
+  $('detail').className = 'alert ' + (s.state === 'setup' ? 'info' : s.state === 'connecting' || s.state === 'starting' ? 'warn' : 'bad');
   $('fp').textContent = s.fingerprint || '—';
   $('pwState').innerHTML = s.passwordSet ? '<span class="badge ok">Set</span>' : '<span class="badge bad">Not set</span>';
   $('crumbDevice').textContent = s.config.deviceId;

@@ -43,6 +43,16 @@ brew install makensis && bash scripts/build-windows.sh    # → dist/HopDesk-<ve
 
 Set `WITH_FFMPEG=0` to build the Windows installer without ffmpeg.
 
+## Keeping permissions across rebuilds (free)
+
+macOS ties Screen Recording and Accessibility to the exact signature of the app. Ad-hoc signed builds get a new signature every time, so macOS forgets both permissions after each rebuild. To fix that on your own Mac, create a free self-signed certificate once:
+
+```sh
+bash scripts/make-signing-cert.sh
+```
+
+From then on, `build-macos.sh` signs with it automatically. The first time, remove HopDesk from **Screen & System Audio Recording** and **Accessibility** in System Settings and grant them again. After that, they stay on across rebuilds. This only helps on the Mac that builds the app: other Macs still see an unsigned app.
+
 ## Code signing (optional, paid)
 
 Without signing, macOS asks you to click **Open Anyway** the first time, and Windows SmartScreen shows a warning. On a Mac, permissions are also tied to the exact build, so after an update you may need to switch Screen Recording and Accessibility off and on again.

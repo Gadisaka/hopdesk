@@ -182,15 +182,14 @@ func startTailnet(srv *server.Server) {
 }
 
 func funnelHelp(msg string) string {
-	low := strings.ToLower(msg)
+	// Look at the words only: Tailscale's errors end with a https:// link,
+	// which must not be mistaken for "HTTPS is off".
+	low := strings.ToLower(regexp.MustCompile(`https?://\S+`).ReplaceAllString(msg, ""))
 	switch {
+	case strings.Contains(low, "node attribute"), strings.Contains(low, "funnel not available") && !strings.Contains(low, "https must be enabled"):
+		return `Allow Funnel for your tailnet: open Access controls in the Tailscale admin console, add "nodeAttrs": [{"target": ["autogroup:member"], "attr": ["funnel"]}] to the policy and save: https://login.tailscale.com/admin/acls/file`
 	case strings.Contains(low, "https"), strings.Contains(low, "cert"):
 		return "Turn on HTTPS certificates in the Tailscale admin console (DNS page): https://login.tailscale.com/admin/dns"
-	case strings.Contains(low, "funnel"):
-		if u := regexp.MustCompile(`https://\S+`).FindString(msg); u != "" {
-			return "Allow Funnel for this device: " + strings.TrimRight(u, ".,)")
-		}
-		return "Allow Funnel in the Tailscale admin console (Access controls → add the \"funnel\" node attribute): https://login.tailscale.com/admin/acls/file"
 	}
 	return msg
 }

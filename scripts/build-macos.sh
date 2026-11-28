@@ -2,6 +2,8 @@
 # Builds dist/HopDesk.app (Apple Silicon + Intel) and a .dmg. Run on a Mac
 # with Go and the Xcode command line tools.
 #
+# Keep macOS permissions across rebuilds (free): run scripts/make-signing-cert.sh once.
+#
 # Optional signing and notarization (needs a paid Apple Developer account):
 #   MACOS_SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)"
 #   APPLE_ID=you@example.com APPLE_TEAM_ID=TEAMID APPLE_APP_PASSWORD=xxxx-xxxx-xxxx-xxxx
@@ -41,11 +43,19 @@ done
 iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/HopDesk.icns"
 rm -rf "$ICONSET"
 
-# Sign: Developer ID if available, otherwise ad-hoc (fine for personal use).
+# Sign: an Apple Developer ID if one is set; otherwise the free "HopDesk Local"
+# certificate from scripts/make-signing-cert.sh if it exists (keeps macOS
+# permissions across rebuilds on this Mac); otherwise ad-hoc.
+LOCAL_IDENTITY="HopDesk Local"
 if [ -n "${MACOS_SIGN_IDENTITY:-}" ]; then
   codesign --force --options runtime --timestamp --sign "$MACOS_SIGN_IDENTITY" "$APP"
+elif security find-certificate -c "$LOCAL_IDENTITY" >/dev/null 2>&1; then
+  echo "Signing with the \"$LOCAL_IDENTITY\" certificate"
+  codesign --force --sign "$LOCAL_IDENTITY" "$APP"
 else
   codesign --force --sign - "$APP"
+  echo "Note: ad-hoc signed. macOS will forget Screen Recording and Accessibility after each rebuild."
+  echo "      Run scripts/make-signing-cert.sh once to keep them."
 fi
 codesign --verify --verbose "$APP"
 
